@@ -178,6 +178,45 @@ function Dashboard({ user, data }) {
     atm: Object.values(d2?.atm || {}).reduce((s, v) => s + (v.total || 0), 0),
   };
 
+  // ─── Synthèse automatique : calcule points forts / points faibles ───────────
+  const computeSynthese = () => {
+    const forts = [], faibles = [];
+    for (const store of stores) {
+      const acc = d?.accessoires?.[store], gp = d?.gp?.[store], occ = d?.occasion?.[store];
+      const mob = d2?.mobileo?.[store], atm = d2?.atm?.[store];
+      // Accessoires
+      if (acc?.ratio != null) {
+        if (acc.ratio >= 25) forts.push(`${store} — Accessoires ${acc.ratio}%`);
+        else if (acc.ratio < 20) faibles.push(`${store} — Accessoires ${acc.ratio}% (obj. 25%)`);
+      }
+      // GP
+      if (gp?.ratio != null) {
+        if (gp.ratio >= 20) forts.push(`${store} — GP ${gp.ratio}%`);
+        else if (gp.ratio < 18) faibles.push(`${store} — GP ${gp.ratio}% (obj. 20%)`);
+      }
+      // Occasion
+      if (occ?.volume != null && occ?.objectif) {
+        const pct = Math.round((occ.volume / occ.objectif) * 100);
+        if (pct >= 100) forts.push(`${store} — Occasion ${occ.volume}/${occ.objectif}`);
+        else if (pct < 40) faibles.push(`${store} — Occasion ${occ.volume}/${occ.objectif}`);
+      }
+      // Mobileo
+      if (mob?.total != null) {
+        if (mob.total >= 10) forts.push(`${store} — Mobileo ${mob.total} contrats`);
+        else if (mob.total === 0) faibles.push(`${store} — Mobileo : aucun contrat`);
+      }
+      // ATM
+      if (atm?.ratio != null && atm?.mobOcc > 0) {
+        if (atm.ratio >= 10) forts.push(`${store} — ATM ${atm.ratio}%`);
+        else if (atm.ratio === 0) faibles.push(`${store} — ATM 0% (obj. 10%)`);
+      }
+    }
+    return { forts, faibles };
+  };
+  const synthese = computeSynthese();
+  // Phrase d'analyse rédigée par le RZ (lue depuis Notion)
+  const phraseRZ = data?.syntheseRZ || "";
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
       <div>
@@ -202,6 +241,47 @@ function Dashboard({ user, data }) {
             </Card>
           ))}
         </div>
+      )}
+
+      {/* ─── ENCART SYNTHÈSE : Points forts / Points faibles ─── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 12 }}>
+        <Card style={{ borderTop: `3px solid ${C.ok}` }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.ok, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>✓ Points forts</div>
+          {synthese.forts.length === 0 ? (
+            <div style={{ fontSize: 12, color: C.gray400, fontStyle: "italic" }}>Aucun objectif pleinement atteint ce mois-ci.</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {synthese.forts.map((f, i) => (
+                <div key={i} style={{ fontSize: 12, color: C.text, display: "flex", gap: 7, alignItems: "flex-start", lineHeight: 1.5 }}>
+                  <span style={{ color: C.ok, flexShrink: 0 }}>●</span>{f}
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        <Card style={{ borderTop: `3px solid ${C.bad}` }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.bad, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>⚠ Points à travailler</div>
+          {synthese.faibles.length === 0 ? (
+            <div style={{ fontSize: 12, color: C.gray400, fontStyle: "italic" }}>Aucun point critique. Bon mois !</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {synthese.faibles.map((f, i) => (
+                <div key={i} style={{ fontSize: 12, color: C.text, display: "flex", gap: 7, alignItems: "flex-start", lineHeight: 1.5 }}>
+                  <span style={{ color: C.bad, flexShrink: 0 }}>●</span>{f}
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {/* Phrase d'analyse rédigée par le RZ */}
+      {phraseRZ && (
+        <Card accent={C.accent}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.accent, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>💬 Analyse de Thomas Desternes</div>
+          <p style={{ margin: 0, fontSize: 14, color: C.text, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{phraseRZ}</p>
+        </Card>
       )}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))", gap: 12 }}>
@@ -261,7 +341,9 @@ function AnalysisList({ isRZ, stores, store, analysisMap }) {
 // ─── RESULTS PAGE (Page 1 + Page 2) ──────────────────────────────────────────
 function ResultsPage({ user, data, onRefresh, refreshing }) {
   const isRZ = user.role === "rz";
-  const stores = isRZ ? STORES_ORDER : [user.store];
+  const [filterStore, setFilterStore] = useState("all");
+  const allStores = isRZ ? STORES_ORDER : [user.store];
+  const stores = (isRZ && filterStore !== "all") ? [filterStore] : allStores;
   const d = data?.page1, d2 = data?.page2;
 
   const TH = ({ children, a = "left" }) => <th style={{ textAlign: a, padding: "8px 10px", fontSize: 11, fontWeight: 700, color: C.gray400, textTransform: "uppercase", borderBottom: `2px solid ${C.gray50}`, whiteSpace: "nowrap" }}>{children}</th>;
@@ -274,7 +356,16 @@ function ResultsPage({ user, data, onRefresh, refreshing }) {
           <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: C.navy }}>Résultats commerciaux</h2>
           <p style={{ margin: "2px 0 0", fontSize: 12, color: C.gray400 }}>{data?.period} · données du {data?.updated}</p>
         </div>
-        {isRZ && <Btn size="sm" variant="secondary" onClick={onRefresh} style={{ opacity: refreshing ? 0.6 : 1 }}>{refreshing ? "⏳ Synchro…" : "🔄 Actualiser depuis Notion"}</Btn>}
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          {isRZ && (
+            <select value={filterStore} onChange={e => setFilterStore(e.target.value)}
+              style={{ border: `1.5px solid ${C.gray200}`, borderRadius: 8, padding: "7px 12px", fontSize: 13, fontFamily: "inherit", color: C.navy, background: C.white, cursor: "pointer" }}>
+              <option value="all">🏢 Tous les magasins</option>
+              {STORES_ORDER.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          )}
+          {isRZ && <Btn size="sm" variant="secondary" onClick={onRefresh} style={{ opacity: refreshing ? 0.6 : 1 }}>{refreshing ? "⏳ Synchro…" : "🔄 Actualiser"}</Btn>}
+        </div>
       </div>
 
       {/* ACCESSOIRES */}
@@ -456,12 +547,151 @@ function VisitsPage({ user, visits }) {
 }
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
+// ─── HISTORY PAGE — courbes de progression mois par mois ─────────────────────
+function MiniLineChart({ data, label, suffix = "", target, color = C.accent }) {
+  // data : [{ mois, value }]
+  const points = data.filter(d => d.value != null);
+  if (points.length === 0) return null;
+  const values = points.map(p => p.value);
+  const maxV = Math.max(...values, target || 0) * 1.1;
+  const minV = Math.min(...values, 0);
+  const range = maxV - minV || 1;
+  const W = 280, H = 90, pad = 8;
+  const stepX = points.length > 1 ? (W - pad * 2) / (points.length - 1) : 0;
+  const xy = points.map((p, i) => ({
+    x: pad + i * stepX,
+    y: H - pad - ((p.value - minV) / range) * (H - pad * 2),
+    v: p.value, mois: p.mois,
+  }));
+  const path = xy.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
+  const targetY = target != null ? H - pad - ((target - minV) / range) * (H - pad * 2) : null;
+  const last = points[points.length - 1].value;
+  const first = points[0].value;
+  const delta = last - first;
+
+  return (
+    <Card>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: C.gray600, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: delta > 0 ? C.ok : delta < 0 ? C.bad : C.gray400 }}>
+          {points.length > 1 ? (delta > 0 ? `📈 +${delta.toFixed(1)}${suffix}` : delta < 0 ? `📉 ${delta.toFixed(1)}${suffix}` : "➡️ stable") : ""}
+        </span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: 90 }}>
+        {targetY != null && (
+          <line x1={pad} y1={targetY} x2={W - pad} y2={targetY} stroke={C.navy} strokeWidth="1" strokeDasharray="3 3" opacity="0.25" />
+        )}
+        <path d={path} fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+        {xy.map((p, i) => (
+          <g key={i}>
+            <circle cx={p.x} cy={p.y} r="3.5" fill={color} />
+            {(i === xy.length - 1 || xy.length <= 4) && (
+              <text x={p.x} y={p.y - 8} textAnchor="middle" fontSize="10" fontWeight="700" fill={C.navy}>{p.v}{suffix}</text>
+            )}
+          </g>
+        ))}
+      </svg>
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 2 }}>
+        {xy.map((p, i) => (
+          <span key={i} style={{ fontSize: 9, color: C.gray400, flex: 1, textAlign: "center" }}>{p.mois.slice(5)}/{p.mois.slice(2, 4)}</span>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function HistoryPage({ user, history }) {
+  const isRZ = user.role === "rz";
+  const allStores = isRZ ? STORES_ORDER : [user.store];
+  const [selStore, setSelStore] = useState(isRZ ? STORES_ORDER[0] : user.store);
+  const byStore = history?.byStore || {};
+  const months = history?.months || [];
+
+  const storeData = byStore[selStore] || [];
+  const mkSeries = (key) => storeData.map(r => ({ mois: r.mois, value: r[key] }));
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: C.navy }}>Historique & progression</h2>
+          <p style={{ margin: "2px 0 0", fontSize: 12, color: C.gray400 }}>
+            {months.length} mois archivé{months.length > 1 ? "s" : ""}{months.length ? ` · de ${months[0]} à ${months[months.length - 1]}` : ""}
+          </p>
+        </div>
+        {isRZ && (
+          <select value={selStore} onChange={e => setSelStore(e.target.value)}
+            style={{ border: `1.5px solid ${C.gray200}`, borderRadius: 8, padding: "7px 12px", fontSize: 13, fontFamily: "inherit", color: C.navy, background: C.white, cursor: "pointer" }}>
+            {STORES_ORDER.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        )}
+      </div>
+
+      {months.length === 0 ? (
+        <Card>
+          <div style={{ textAlign: "center", padding: "28px 0", color: C.gray400 }}>
+            <div style={{ fontSize: 28, marginBottom: 8 }}>📅</div>
+            <div style={{ fontSize: 13 }}>Aucun historique pour l'instant.<br />L'archivage se remplit mois après mois dans Notion.</div>
+          </div>
+        </Card>
+      ) : storeData.length < 2 ? (
+        <Card accent={C.accent}>
+          <div style={{ fontSize: 13, color: C.gray600, lineHeight: 1.6 }}>
+            <strong style={{ color: C.navy }}>{selStore}</strong> — un seul mois archivé pour l'instant ({storeData[0]?.mois}). Les courbes de progression apparaîtront dès qu'un deuxième mois sera enregistré. Patience, l'historique se construit mois après mois !
+          </div>
+        </Card>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 }}>
+          <MiniLineChart data={mkSeries("accessoires")} label="Ratio Accessoires" suffix="%" target={25} color={C.accent} />
+          <MiniLineChart data={mkSeries("gp")} label="Ratio GP" suffix="%" target={20} color="#8B5CF6" />
+          <MiniLineChart data={mkSeries("occasion")} label="Mobiles Occasion" suffix="" target={storeData[storeData.length - 1]?.objectifOccasion} color="#0EA5E9" />
+          <MiniLineChart data={mkSeries("mobileo")} label="Forfaits Mobileo" suffix="" target={10} color="#F59E0B" />
+          <MiniLineChart data={mkSeries("atm")} label="Ratio ATM" suffix="%" target={10} color="#22C55E" />
+          <MiniLineChart data={mkSeries("margeTotale")} label="Marge Totale" suffix="€" color={C.navy} />
+        </div>
+      )}
+
+      {/* Comparaison année sur année si plusieurs années */}
+      {storeData.length >= 2 && (
+        <Card>
+          <SectionHead>📊 Détail mois par mois — {selStore}</SectionHead>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+              <thead>
+                <tr style={{ borderBottom: `2px solid ${C.gray50}` }}>
+                  {["Mois", "Acc.", "GP", "Occ.", "Mobileo", "ATM", "Marge"].map(h => (
+                    <th key={h} style={{ textAlign: h === "Mois" ? "left" : "right", padding: "7px 8px", fontSize: 10, fontWeight: 700, color: C.gray400, textTransform: "uppercase" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {storeData.map((r, i) => (
+                  <tr key={i} style={{ background: i % 2 ? C.bg : C.white }}>
+                    <td style={{ padding: "7px 8px", fontWeight: 700, color: C.navy }}>{r.mois}</td>
+                    <td style={{ padding: "7px 8px", textAlign: "right", color: r.accessoires >= 25 ? C.ok : C.bad, fontWeight: 600 }}>{r.accessoires ?? "—"}%</td>
+                    <td style={{ padding: "7px 8px", textAlign: "right", color: r.gp >= 20 ? C.ok : C.bad, fontWeight: 600 }}>{r.gp ?? "—"}%</td>
+                    <td style={{ padding: "7px 8px", textAlign: "right" }}>{r.occasion ?? "—"}</td>
+                    <td style={{ padding: "7px 8px", textAlign: "right", color: r.mobileo >= 10 ? C.ok : C.bad, fontWeight: 600 }}>{r.mobileo ?? "—"}</td>
+                    <td style={{ padding: "7px 8px", textAlign: "right", color: r.atm >= 10 ? C.ok : C.bad, fontWeight: 600 }}>{r.atm ?? "—"}%</td>
+                    <td style={{ padding: "7px 8px", textAlign: "right", color: C.gray600 }}>{r.margeTotale ? `${r.margeTotale.toLocaleString("fr-FR")}€` : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [page, setPage] = useState("dashboard");
   const [menuOpen, setMenuOpen] = useState(false);
   const [results, setResults] = useState(null);
   const [visits, setVisits] = useState(null);
+  const [history, setHistory] = useState(null);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -470,12 +700,14 @@ export default function App() {
     if (refresh) setRefreshing(true); else setLoading(true);
     setError("");
     try {
-      const [r, v] = await Promise.all([
+      const [r, v, h] = await Promise.all([
         api.get(`/api/results${refresh ? "?refresh=1" : ""}`),
         api.get(`/api/visits${refresh ? "?refresh=1" : ""}`),
+        api.get(`/api/history${refresh ? "?refresh=1" : ""}`).catch(() => ({ months: [], byStore: {} })),
       ]);
       setResults(r);
       setVisits(v.visits);
+      setHistory(h);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -490,6 +722,7 @@ export default function App() {
   const nav = [
     { id: "dashboard", label: "Vue d'ensemble", icon: "📊" },
     { id: "results", label: "Résultats", icon: "📈" },
+    { id: "history", label: "Historique", icon: "📅" },
     { id: "visits", label: "Visites", icon: "📋" },
   ];
 
@@ -563,6 +796,7 @@ export default function App() {
           <>
             {page === "dashboard" && results && <Dashboard user={user} data={results} />}
             {page === "results" && results && <ResultsPage user={user} data={results} onRefresh={() => loadAll(true)} refreshing={refreshing} />}
+            {page === "history" && <HistoryPage user={user} history={history} />}
             {page === "visits" && <VisitsPage user={user} visits={visits} />}
             {!results && !error && <Spinner />}
           </>
