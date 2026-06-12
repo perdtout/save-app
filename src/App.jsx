@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import logoRepairMobile from "./RepairMobile.png";
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  CONFIGURATION — change cette URL pour pointer vers ton backend
@@ -130,13 +131,11 @@ function LoginScreen({ onLogin }) {
   return (
     <div style={{ minHeight: "100vh", background: C.navy, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <div style={{ marginBottom: 28 }}>
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 10, background: "rgba(255,255,255,0.07)", borderRadius: 14, padding: "10px 18px" }}>
-          <div style={{ width: 38, height: 38, borderRadius: 9, background: C.accent, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <span style={{ color: C.white, fontSize: 20, fontWeight: 900, fontFamily: "Georgia, serif" }}>J</span>
-          </div>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 12, background: "rgba(255,255,255,0.07)", borderRadius: 14, padding: "12px 20px" }}>
+          <img src={logoRepairMobile} alt="Repair Mobile" style={{ width: 52, height: 52, borderRadius: 10, objectFit: "cover" }} />
           <div>
-            <div style={{ color: C.white, fontSize: 17, fontWeight: 800, letterSpacing: "0.04em" }}>JUVI<span style={{ color: C.accentB }}>GROUP</span></div>
-            <div style={{ color: C.accentB, fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase" }}>SAVE · Pilotage Réseau</div>
+            <div style={{ color: C.white, fontSize: 18, fontWeight: 800, letterSpacing: "0.02em" }}>Repair<span style={{ color: C.accentB }}>Mobile</span></div>
+            <div style={{ color: C.accentB, fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase" }}>Pilotage Réseau</div>
           </div>
         </div>
       </div>
@@ -460,6 +459,7 @@ function VisitsPage({ user, visits }) {
 export default function App() {
   const [user, setUser] = useState(null);
   const [page, setPage] = useState("dashboard");
+  const [menuOpen, setMenuOpen] = useState(false);
   const [results, setResults] = useState(null);
   const [visits, setVisits] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -495,32 +495,69 @@ export default function App() {
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'Inter','Segoe UI',system-ui,sans-serif", color: C.text }}>
-      <style>{`* { box-sizing: border-box; } a { text-decoration: none; }`}</style>
-      <nav style={{ background: C.navy, padding: "0 20px", display: "flex", alignItems: "center", height: 54, position: "sticky", top: 0, zIndex: 100, boxShadow: "0 2px 12px rgba(0,0,0,0.25)", gap: 8 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 9, marginRight: 20, flexShrink: 0 }}>
-          <div style={{ width: 32, height: 32, borderRadius: 7, background: C.accent, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <span style={{ color: C.white, fontSize: 17, fontWeight: 900, fontFamily: "Georgia,serif" }}>J</span>
-          </div>
+      <style>{`
+        * { box-sizing: border-box; }
+        a { text-decoration: none; }
+        .nav-tabs-desktop { display: flex; gap: 2px; flex: 1; }
+        .nav-burger { display: none; }
+        .nav-user-role { display: block; }
+        .nav-mobile-menu { display: none; }
+        @media (max-width: 700px) {
+          .nav-tabs-desktop { display: none !important; }
+          .nav-burger { display: inline-flex !important; }
+          .nav-user-role { display: none !important; }
+          .nav-mobile-menu.open { display: flex !important; }
+          .main-content { padding: 16px 12px !important; }
+        }
+      `}</style>
+
+      {/* NAV */}
+      <nav style={{ background: C.navy, padding: "0 16px", display: "flex", alignItems: "center", height: 54, position: "sticky", top: 0, zIndex: 100, boxShadow: "0 2px 12px rgba(0,0,0,0.25)", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 9, marginRight: 12, flexShrink: 0 }}>
+          <img src={logoRepairMobile} alt="Repair Mobile" style={{ width: 34, height: 34, borderRadius: 7, objectFit: "cover" }} />
           <div>
-            <div style={{ color: C.white, fontSize: 13, fontWeight: 800, lineHeight: 1 }}>JUVI<span style={{ color: C.accentB }}>GROUP</span></div>
-            <div style={{ color: C.accentB, fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase" }}>SAVE Réseau</div>
+            <div style={{ color: C.white, fontSize: 13, fontWeight: 800, lineHeight: 1 }}>Repair<span style={{ color: C.accentB }}>Mobile</span></div>
+            <div style={{ color: C.accentB, fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase" }}>Pilotage Réseau</div>
           </div>
         </div>
-        <div style={{ display: "flex", gap: 2, flex: 1, overflowX: "auto" }}>
+
+        {/* Onglets — visibles sur ordinateur */}
+        <div className="nav-tabs-desktop">
           {nav.map(({ id, label, icon }) => (
             <button key={id} onClick={() => setPage(id)} style={{ padding: "5px 12px", borderRadius: 7, border: "none", background: page === id ? C.accent : "transparent", color: page === id ? C.white : C.gray400, fontSize: 12, fontWeight: page === id ? 700 : 400, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit" }}>{icon} {label}</button>
           ))}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          <div style={{ textAlign: "right" }}>
-            <div style={{ color: C.white, fontSize: 11, fontWeight: 600 }}>{user.name}</div>
-            <div style={{ color: C.accentB, fontSize: 9, textTransform: "uppercase", letterSpacing: "0.06em" }}>{user.role === "rz" ? "Resp. de Zone" : "Magasin"}</div>
-          </div>
-          <button onClick={() => { api.token = null; setUser(null); }} style={{ padding: "4px 9px", borderRadius: 6, border: `1px solid ${C.navyL}`, background: "transparent", color: C.gray400, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>⏏</button>
+
+        {/* Pousse les éléments de droite au bout */}
+        <div style={{ flex: 1 }} />
+
+        {/* Infos utilisateur — masquées sur mobile pour gagner de la place */}
+        <div className="nav-user-role" style={{ textAlign: "right", flexShrink: 0 }}>
+          <div style={{ color: C.white, fontSize: 11, fontWeight: 600 }}>{user.name}</div>
+          <div style={{ color: C.accentB, fontSize: 9, textTransform: "uppercase", letterSpacing: "0.06em" }}>{user.role === "rz" ? "Resp. de Zone" : "Magasin"}</div>
         </div>
+
+        {/* Déconnexion — toujours visible */}
+        <button onClick={() => { api.token = null; setUser(null); }} style={{ padding: "4px 9px", borderRadius: 6, border: `1px solid ${C.navyL}`, background: "transparent", color: C.gray400, fontSize: 13, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>⏏</button>
+
+        {/* Bouton hamburger — visible sur mobile uniquement */}
+        <button className="nav-burger" onClick={() => setMenuOpen(o => !o)} style={{ alignItems: "center", justifyContent: "center", width: 38, height: 34, borderRadius: 7, border: `1px solid ${C.navyL}`, background: menuOpen ? C.accent : "transparent", color: C.white, fontSize: 18, cursor: "pointer", fontFamily: "inherit", flexShrink: 0, padding: 0 }}>
+          {menuOpen ? "✕" : "☰"}
+        </button>
       </nav>
 
-      <main style={{ maxWidth: 1100, margin: "0 auto", padding: "22px 18px" }}>
+      {/* Menu déroulant mobile */}
+      <div className={`nav-mobile-menu${menuOpen ? " open" : ""}`} style={{ flexDirection: "column", background: C.navyMid, position: "sticky", top: 54, zIndex: 99, boxShadow: "0 4px 12px rgba(0,0,0,0.25)", padding: "8px" }}>
+        <div style={{ padding: "8px 12px", borderBottom: `1px solid ${C.navyL}`, marginBottom: 6 }}>
+          <div style={{ color: C.white, fontSize: 13, fontWeight: 700 }}>{user.name}</div>
+          <div style={{ color: C.accentB, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.06em" }}>{user.role === "rz" ? "Responsable de Zone" : "Magasin"}</div>
+        </div>
+        {nav.map(({ id, label, icon }) => (
+          <button key={id} onClick={() => { setPage(id); setMenuOpen(false); }} style={{ textAlign: "left", padding: "11px 14px", borderRadius: 8, border: "none", background: page === id ? C.accent : "transparent", color: page === id ? C.white : C.gray200, fontSize: 14, fontWeight: page === id ? 700 : 500, cursor: "pointer", fontFamily: "inherit", marginBottom: 2 }}>{icon}  {label}</button>
+        ))}
+      </div>
+
+      <main className="main-content" style={{ maxWidth: 1100, margin: "0 auto", padding: "22px 18px" }}>
         {error && <div style={{ marginBottom: 16 }}><ErrorBanner message={error} onRetry={() => loadAll()} /></div>}
         {loading ? <Spinner label="Lecture des données Notion…" /> : (
           <>
