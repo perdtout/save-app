@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import logoRepairMobile from "./RepairMobile.png";
+import logoRepairMobile from "./RepairMobile.PNG";
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  CONFIGURATION — change cette URL pour pointer vers ton backend
