@@ -476,18 +476,33 @@ function ResultsPage({ user, data, onRefresh, refreshing }) {
 // ─── VISITS PAGE ──────────────────────────────────────────────────────────────
 function VisitsPage({ user, visits }) {
   const isRZ = user.role === "rz";
+  const [filterStore, setFilterStore] = useState("all");
+  const shown = (isRZ && filterStore !== "all")
+    ? (visits || []).filter(v => v.store === filterStore)
+    : (visits || []);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div>
-        <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: C.navy }}>Comptes rendus de visites</h2>
-        <p style={{ margin: "2px 0 0", fontSize: 12, color: C.gray400 }}>Base Notion "Suivi Visites Magasins SAVE"</p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: C.navy }}>Comptes rendus de visites</h2>
+          <p style={{ margin: "2px 0 0", fontSize: 12, color: C.gray400 }}>
+            Base Notion "Suivi Visites Magasins SAVE"{isRZ && filterStore !== "all" ? ` · ${shown.length} pour ${filterStore}` : ""}
+          </p>
+        </div>
+        {isRZ && (
+          <select value={filterStore} onChange={e => setFilterStore(e.target.value)}
+            style={{ border: `1.5px solid ${C.gray200}`, borderRadius: 8, padding: "7px 12px", fontSize: 13, fontFamily: "inherit", color: C.navy, background: C.white, cursor: "pointer" }}>
+            <option value="all">🏢 Toutes les villes</option>
+            {STORES_ORDER.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        )}
       </div>
-      {(!visits || visits.length === 0) ? (
+      {(!shown || shown.length === 0) ? (
         <Card><div style={{ textAlign: "center", padding: "28px 0", color: C.gray400 }}>
           <div style={{ fontSize: 28, marginBottom: 8 }}>📋</div>
-          <div style={{ fontSize: 13 }}>{isRZ ? "Aucune visite récente." : "Aucun compte rendu publié pour votre magasin."}</div>
+          <div style={{ fontSize: 13 }}>{isRZ ? (filterStore !== "all" ? `Aucune visite pour ${filterStore}.` : "Aucune visite récente.") : "Aucun compte rendu publié pour votre magasin."}</div>
         </div></Card>
-      ) : visits.map((v) => {
+      ) : shown.map((v) => {
         const statutColor = v.statut === "Compte-rendu envoyé" ? C.ok : v.statut === "Réalisée" ? C.accent : C.warn;
         return (
         <Card key={v.id} accent={C.accent}>
