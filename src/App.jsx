@@ -214,8 +214,10 @@ function Dashboard({ user, data }) {
     return { forts, faibles };
   };
   const synthese = computeSynthese();
-  // Phrase d'analyse rédigée par le RZ (lue depuis Notion)
-  const phraseRZ = data?.syntheseRZ || "";
+  // Fait marquant / "Ce que je retiens de cette journée" (depuis Notion)
+  const faits = (data?.faitsMarquants && data.faitsMarquants.length)
+    ? data.faitsMarquants
+    : (data?.syntheseRZ ? [data.syntheseRZ] : []);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
@@ -276,13 +278,49 @@ function Dashboard({ user, data }) {
         </Card>
       </div>
 
-      {/* Phrase d'analyse rédigée par le RZ */}
-      {phraseRZ && (
+      {/* Ce que je retiens de cette journée (fait marquant) */}
+      {faits.length > 0 && (
         <Card accent={C.accent}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: C.accent, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>💬 Analyse de Thomas Desternes</div>
-          <p style={{ margin: 0, fontSize: 14, color: C.text, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{phraseRZ}</p>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.accent, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>⭐ Ce que je retiens de cette journée</div>
+          {faits.map((f, i) => (
+            <p key={i} style={{ margin: i === 0 ? 0 : "10px 0 0", fontSize: 14, color: C.text, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{f}</p>
+          ))}
         </Card>
       )}
+
+      {/* Mes retours par magasin (synthèse des commentaires Notion) */}
+      {(() => {
+        const retours = [];
+        for (const store of stores) {
+          const items = [
+            d?.analysis?.accessoires?.[store],
+            d?.analysis?.gp?.[store],
+            d2?.analysis?.mobileo?.[store],
+            d2?.analysis?.atm?.[store],
+          ].filter(Boolean);
+          if (items.length) retours.push({ store, items });
+        }
+        if (retours.length === 0) return null;
+        return (
+          <Card>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.gray400, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 12 }}>💬 Mes retours par magasin</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {retours.map(({ store, items }) => (
+                <div key={store} style={{ padding: "10px 12px", background: C.bg, borderRadius: 8 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.navy, marginBottom: 6 }}>{store}</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    {items.map((t, i) => (
+                      <div key={i} style={{ fontSize: 12, color: C.text, lineHeight: 1.55, display: "flex", gap: 6, alignItems: "flex-start" }}>
+                        <span style={{ color: C.accent, flexShrink: 0 }}>•</span>{t}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        );
+      })()}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))", gap: 12 }}>
         {stores.map(store => {
