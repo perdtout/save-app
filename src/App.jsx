@@ -10,8 +10,8 @@ const API_URL = "https://save-backend-cn9b.onrender.com";
 
 // ─── DESIGN TOKENS — Juvi-Group ──────────────────────────────────────────────
 const C = {
-  navy: "#FA8900", navyMid: "#FA8900", navyL: "#666666",
-  accent: "#F7AB88", accentB: "#F03A07", white: "#FFFFFF",
+  navy: "#F03A07", navyMid: "#FA8900", navyL: "#666666",
+  accent: "#F7AB88", accentB: "#FA8900", white: "#FFFFFF",
   bg: "#F4F7FB", gray50: "#EEF2F7", gray200: "#C8D4E3",
   gray400: "#7A92AD", gray600: "#4A6278",
   ok: "#22C55E", warn: "#F59E0B", bad: "#EF4444", text: "#0D1F3C",
