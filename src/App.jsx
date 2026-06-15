@@ -13,7 +13,7 @@ const C = {
   navy: "#FA9461", navyMid: "#F2550C", navyL: "#F2550C",
   accent: "#F2550C", accentB: "#F2550C", white: "#FFFFFF",
   bg: "#F4F7FB", gray50: "#EEF2F7", gray200: "#C8D4E3",
-  gray400: "#7A92AD", gray600: "#4A6278",
+  gray400: "#2550C", gray600: "#4A6278",
   ok: "#22C55E", warn: "#F59E0B", bad: "#EF4444", text: "#0D1F3C",
 };
 
