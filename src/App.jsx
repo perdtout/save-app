@@ -10,14 +10,18 @@ const API_URL = "https://save-backend-cn9b.onrender.com";
 
 // ─── DESIGN TOKENS — Juvi-Group ──────────────────────────────────────────────
 const C = {
-  navy: "#FA9461", navyMid: "#F2550C", navyL: "#F2550C",
-  accent: "#F2550C", accentB: "#F2550C", white: "#FFFFFF",
+  navy: "#0D1F3C", navyMid: "#162845", navyL: "#1E3A5F",
+  accent: "#2D7DD2", accentB: "#4FA3F7", white: "#FFFFFF",
   bg: "#F4F7FB", gray50: "#EEF2F7", gray200: "#C8D4E3",
-  gray400: "#F2550C", gray600: "#4A6278",
+  gray400: "#7A92AD", gray600: "#4A6278",
   ok: "#22C55E", warn: "#F59E0B", bad: "#EF4444", text: "#0D1F3C",
 };
 
 const STORES_ORDER = ["Pontarlier", "Lons-le-Saunier", "Dijon", "Besançon", "Chalon-sur-Saône"];
+
+// Liens directs vers les pages Notion d'analyse détaillée
+const NOTION_PAGE1_URL = "https://www.notion.so/379b706fb59681b68663eb4920323d27";
+const NOTION_PAGE2_URL = "https://www.notion.so/379b706fb596813ebfe1d33c85a87531";
 
 // ─── UTILS ────────────────────────────────────────────────────────────────────
 const statusC = (s) => s === "ok" ? C.ok : s === "warn" ? C.warn : s === "bad" ? C.bad : C.gray400;
@@ -221,9 +225,19 @@ function Dashboard({ user, data }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-      <div>
-        <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: C.navy }}>Vue d'ensemble</h2>
-        <p style={{ margin: "2px 0 0", fontSize: 12, color: C.gray400 }}>{data?.period} · données Notion du {data?.updated}</p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: C.navy }}>Vue d'ensemble</h2>
+          <p style={{ margin: "2px 0 0", fontSize: 12, color: C.gray400 }}>{data?.period} · données Notion du {data?.updated}</p>
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <a href={NOTION_PAGE1_URL} target="_blank" rel="noopener noreferrer">
+            <Btn size="sm" variant="secondary">📄 Analyse détaillée — Page 1</Btn>
+          </a>
+          <a href={NOTION_PAGE2_URL} target="_blank" rel="noopener noreferrer">
+            <Btn size="sm" variant="secondary">📄 Analyse détaillée — Page 2</Btn>
+          </a>
+        </div>
       </div>
 
       {user.role === "rz" && (
