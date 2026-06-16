@@ -10,11 +10,12 @@ const API_URL = "https://save-backend-cn9b.onrender.com";
 
 // ─── DESIGN TOKENS — Juvi-Group ──────────────────────────────────────────────
 const C = {
-  navy: "#0D1F3C", navyMid: "#162845", navyL: "#1E3A5F",
-  accent: "#2D7DD2", accentB: "#4FA3F7", white: "#FFFFFF",
-  bg: "#F4F7FB", gray50: "#EEF2F7", gray200: "#C8D4E3",
-  gray400: "#7A92AD", gray600: "#4A6278",
-  ok: "#22C55E", warn: "#F59E0B", bad: "#EF4444", text: "#0D1F3C",
+  // Charte Repair Mobile : anthracite foncé (REPAIR) + orange vif (MOBILE)
+  navy: "#2B2B2B", navyMid: "#363636", navyL: "#4A4A4A",
+  accent: "#E8612C", accentB: "#FF8A50", white: "#FFFFFF",
+  bg: "#F7F5F3", gray50: "#F0EDEA", gray200: "#D6CFC8",
+  gray400: "#8A847E", gray600: "#5A544E",
+  ok: "#22C55E", warn: "#F59E0B", bad: "#EF4444", text: "#2B2B2B",
 };
 
 const STORES_ORDER = ["Pontarlier", "Lons-le-Saunier", "Dijon", "Besançon", "Chalon-sur-Saône"];
@@ -752,6 +753,152 @@ function HistoryPage({ user, history }) {
   );
 }
 
+// ─── GUIDE VENTES MOBILEO — contenu des 9 pages du guide de formation ────────
+function GuidePage() {
+  const [open, setOpen] = useState("adn");
+
+  const Section = ({ id, icon, title, children }) => {
+    const isOpen = open === id;
+    return (
+      <Card style={{ padding: 0, overflow: "hidden" }}>
+        <button onClick={() => setOpen(isOpen ? "" : id)}
+          style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 18px", border: "none", background: isOpen ? C.accent : C.white, color: isOpen ? C.white : C.navy, cursor: "pointer", fontFamily: "inherit", fontSize: 14, fontWeight: 700, textAlign: "left" }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 10 }}><span style={{ fontSize: 18 }}>{icon}</span>{title}</span>
+          <span style={{ fontSize: 18, transform: isOpen ? "rotate(90deg)" : "none", transition: "transform 0.2s" }}>›</span>
+        </button>
+        {isOpen && <div style={{ padding: "16px 18px", borderTop: `1px solid ${C.gray50}` }}>{children}</div>}
+      </Card>
+    );
+  };
+
+  const Phrase = ({ children }) => (
+    <div style={{ background: C.bg, borderLeft: `3px solid ${C.accent}`, borderRadius: 6, padding: "10px 14px", margin: "8px 0", fontSize: 13, fontStyle: "italic", color: C.text, lineHeight: 1.6 }}>« {children} »</div>
+  );
+  const Row = ({ k, v }) => (
+    <div style={{ display: "flex", gap: 12, padding: "7px 0", borderBottom: `1px solid ${C.gray50}`, fontSize: 13, lineHeight: 1.55 }}>
+      <div style={{ fontWeight: 700, color: C.navy, minWidth: 130, flexShrink: 0 }}>{k}</div>
+      <div style={{ color: C.text }}>{v}</div>
+    </div>
+  );
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div>
+        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: C.navy }}>Guide Ventes Mobileo</h2>
+        <p style={{ margin: "2px 0 0", fontSize: 12, color: C.gray400 }}>Trame de découverte client — offres mobiles · support terrain</p>
+      </div>
+
+      <Section id="adn" icon="🧬" title="1. L'ADN commercial attendu">
+        <div style={{ fontSize: 13, color: C.text, lineHeight: 1.7, display: "flex", flexDirection: "column", gap: 10 }}>
+          <div><strong style={{ color: C.navy }}>Conseiller avant de vendre.</strong> Le client vient d'abord pour une réparation ou un problème. La proposition Mobileo doit être présentée comme un service utile, pas comme une vente forcée.</div>
+          <div><strong style={{ color: C.navy }}>Rendre la proposition systématique.</strong> Le potentiel vient de la régularité. Si la question n'est pas posée, aucune vente ne peut se déclencher.</div>
+          <div><strong style={{ color: C.navy }}>Faire parler le client.</strong> Une bonne vente commence par des questions ouvertes. Le client doit parler plus que le vendeur.</div>
+          <div><strong style={{ color: C.navy }}>Reformuler avant d'argumenter.</strong> La reformulation montre qu'on écoute et permet de répondre précisément à l'objection.</div>
+          <div><strong style={{ color: C.navy }}>Rester crédible.</strong> Lorsque l'offre actuelle du client est réellement meilleure, on le reconnaît. Cela renforce la confiance.</div>
+          <Phrase>Je ne vous propose pas de changer pour changer. Je vous propose simplement de vérifier si votre offre est encore adaptée à votre usage.</Phrase>
+        </div>
+      </Section>
+
+      <Section id="trame" icon="🗺️" title="2. Trame complète de A à Z">
+        <Row k="1. Accueil" v="Prendre en charge le besoin principal : réparation, diagnostic, protection." />
+        <Row k="2. Accroche" v={'"Je me permets de vous demander chez quel opérateur vous êtes actuellement ?"'} />
+        <Row k="3. Présentation" v={'"Chez Repair Mobile, on répare et protège les téléphones, et on peut aussi étudier votre forfait mobile."'} />
+        <Row k="4. Découverte" v="Comprendre prix, réseau, data, Suisse, engagement, box, satisfaction." />
+        <Row k="5. Vérification" v="Application opérateur ou facture : prix réel + consommation data." />
+        <Row k="6. Proposition" v="Comparer l'offre actuelle avec une solution adaptée." />
+        <Row k="7. Objection" v="Reformuler, rassurer, puis répondre." />
+        <Row k="8. Closing" v={'"On le met en place ensemble maintenant ?"'} />
+        <div style={{ marginTop: 10, fontSize: 12, color: C.gray600, fontStyle: "italic" }}>À éviter : les questions fermées comme "Ça vous intéresse ?" trop tôt. Préférer : "Qu'est-ce qui est important pour vous dans votre forfait ?"</div>
+      </Section>
+
+      <Section id="questions" icon="❓" title="3. Les bonnes questions de découverte">
+        <Row k="Opérateur" v="Chez quel opérateur êtes-vous actuellement ? Depuis combien de temps ?" />
+        <Row k="Prix" v="Savez-vous combien vous payez réellement chaque mois ?" />
+        <Row k="Usage" v="Vous utilisez surtout internet, appels, partage de connexion, vidéos, GPS ?" />
+        <Row k="Data" v="On peut regarder ensemble votre consommation réelle ?" />
+        <Row k="Réseau" v="Vous captez bien partout : maison, travail, trajets, vacances ?" />
+        <Row k="Suisse" v="Avez-vous besoin d'utiliser votre forfait en Suisse ?" />
+        <Row k="Satisfaction" v="Quand vous avez un problème, êtes-vous bien accompagné ?" />
+        <Row k="Frein" v="Qu'est-ce qui vous retiendrait aujourd'hui de changer ?" />
+        <div style={{ marginTop: 10, fontSize: 12, color: C.gray600, fontStyle: "italic" }}>Objectif : ne pas deviner. Faire constater au client lui-même son prix, son usage et ses irritants.</div>
+      </Section>
+
+      <Section id="operateur" icon="📡" title="4. Approche selon l'opérateur">
+        <Row k="Orange" v="Service et proximité : « Vous aimez le réseau Orange. En revanche, êtes-vous satisfait de l'accompagnement quand vous avez besoin d'aide ? »" />
+        <Row k="SFR" v="Incertitude / changement : « Avec les évolutions du marché, savez-vous comment votre offre peut évoluer demain ? Nous pouvons vous proposer une solution stable sur réseau Orange. »" />
+        <Row k="Free" v="Prix ou réseau : « Qu'est-ce qui vous a poussé à aller chez Free : le prix, la data, ou autre chose ? » Puis vérifier la qualité réseau." />
+        <Row k="Bouygues" v="Adéquation de l'offre : « Regardons si votre forfait correspond toujours à votre usage actuel et si une économie est possible. »" />
+        <Row k="Client Suisse" v="Honnêteté : « Si votre offre Suisse est très avantageuse, je vous le dirai. L'objectif est de vous conseiller correctement. »" />
+        <div style={{ marginTop: 10, fontSize: 12, color: C.gray600, fontStyle: "italic" }}>Règle : chaque opérateur donne un angle d'entrée, mais la proposition doit toujours rester personnalisée.</div>
+      </Section>
+
+      <Section id="closing" icon="🤝" title="5. Argumentation et closing">
+        <div style={{ fontSize: 13, color: C.text, lineHeight: 1.7, display: "flex", flexDirection: "column", gap: 10 }}>
+          <div><strong style={{ color: C.navy }}>Argumenter par bénéfice client.</strong> Ne pas vendre uniquement des gigas. Traduire l'offre en bénéfices : économie, réseau, simplicité, accompagnement, proximité.</div>
+          <div><strong style={{ color: C.navy }}>Faire constater le besoin.</strong> « Vous avez un forfait 150 Go, mais vous consommez 8 Go. Aujourd'hui, votre forfait est surdimensionné par rapport à votre usage. »</div>
+          <div><strong style={{ color: C.navy }}>Rassurer sur la simplicité.</strong> « On s'occupe de la mise en place avec vous. L'objectif est que ce soit clair, net et transparent. »</div>
+          <div style={{ marginTop: 4, fontWeight: 700, color: C.navy }}>Formules de closing selon la situation :</div>
+        </div>
+        <div style={{ marginTop: 8 }}>
+          <Row k="Client intéressé" v={'"On le met en place ensemble maintenant ?"'} />
+          <Row k="Client hésitant" v={'"Qu\'est-ce qui vous manque pour être rassuré ?"'} />
+          <Row k="Client pressé" v={'"Je note les éléments et on reprend au moment de la restitution."'} />
+          <Row k="Client refuse" v={'"Aucun souci. Si votre besoin évolue, on reste disponible."'} />
+        </div>
+      </Section>
+
+      <Section id="obj1" icon="💬" title="6. Objections fréquentes — prix et opérateur">
+        <Row k="Je vais réfléchir" v="Si je comprends bien, la proposition vous intéresse mais vous voulez être rassuré avant de décider ?" />
+        <Row k="Je paie déjà peu cher" v="Regardons ensemble si ce prix correspond vraiment à votre usage et s'il y a des options cachées." />
+        <Row k="C'est trop cher" v="Qu'est-ce qui est le plus important pour vous : le prix le plus bas ou le bon équilibre prix, réseau et service ?" />
+        <Row k="Je n'utilise pas internet" v="Justement, il existe peut-être une offre plus adaptée à votre consommation réelle." />
+        <Row k="J'ai une offre avec ma box" v="Votre box n'est pas impactée. Nous parlons uniquement de votre ligne mobile." />
+        <Row k="Je suis bien chez Orange" v="Vous appréciez le réseau Orange. Et côté service, quand vous avez besoin d'aide, vous êtes satisfait ?" />
+        <Row k="Je préfère la boutique" v="C'est possible. Ici, l'avantage est que nous vous accompagnons directement et restons disponibles." />
+        <Row k="Free pour le prix" v="Le prix est important. Vérifions aussi si le réseau et l'usage correspondent bien à vos besoins." />
+      </Section>
+
+      <Section id="obj2" icon="🧠" title="7. Objections — peur, temps et décision">
+        <Row k="Je n'aime pas changer" v="Je comprends. Ce que je vous propose, c'est de vérifier, pas de changer sans raison." />
+        <Row k="J'ai peur que ça coupe" v="La portabilité est prévue pour limiter ce risque et nous vous accompagnons dans les étapes." />
+        <Row k="Je ne connais pas votre offre" v="C'est justement notre rôle de vous l'expliquer simplement et de comparer avec votre offre actuelle." />
+        <Row k="Je suis engagé" v="Regardons votre situation avant de conclure quoi que ce soit." />
+        <Row k="Demander à mon conjoint" v="Bien sûr. On peut préparer les éléments pour que vous puissiez lui expliquer clairement." />
+        <Row k="Je n'ai pas le temps" v="L'étude est rapide. Sinon, je note et on reprend à la restitution du téléphone." />
+        <Row k="Mauvaise expérience" v="Je comprends votre prudence. Justement, on avance étape par étape, de façon claire." />
+        <Row k="Non merci" v="Aucun souci. Je vous le propose car cela peut être utile, mais la décision vous appartient." />
+      </Section>
+
+      <Section id="memo" icon="📋" title="8. Fiche mémo comptoir">
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {[
+            ["1", "Demander", '"Chez quel opérateur êtes-vous ?"'],
+            ["2", "Découvrir", '"Qu\'est-ce qui compte le plus pour vous ?"'],
+            ["3", "Vérifier", "Prix réel + consommation + engagement + Suisse."],
+            ["4", "Comparer", "Offre actuelle vs besoin réel."],
+            ["5", "Reformuler", '"Si je comprends bien..."'],
+            ["6", "Proposer", "Une solution simple et adaptée."],
+            ["7", "Conclure", '"On le met en place ensemble ?"'],
+          ].map(([n, t, d]) => (
+            <div key={n} style={{ display: "flex", gap: 10, alignItems: "center", background: C.bg, borderRadius: 8, padding: "8px 12px" }}>
+              <span style={{ width: 24, height: 24, borderRadius: "50%", background: C.accent, color: C.white, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 13, flexShrink: 0 }}>{n}</span>
+              <span style={{ fontWeight: 700, color: C.navy, fontSize: 13, minWidth: 90 }}>{t}</span>
+              <span style={{ fontSize: 13, color: C.text }}>{d}</span>
+            </div>
+          ))}
+        </div>
+        <div style={{ marginTop: 14, padding: "12px 14px", background: C.accent + "15", borderRadius: 8, borderLeft: `3px solid ${C.accent}` }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.accent, marginBottom: 6, textTransform: "uppercase" }}>Indicateurs à suivre chaque semaine</div>
+          <div style={{ fontSize: 13, color: C.text, lineHeight: 1.7 }}>Nombre de propositions faites · études réalisées · ventes conclues · taux de transformation · objections les plus fréquentes · meilleures phrases qui fonctionnent.</div>
+        </div>
+        <div style={{ marginTop: 12, fontSize: 13, color: C.navy, fontWeight: 600, fontStyle: "italic", textAlign: "center", lineHeight: 1.6 }}>
+          La performance vient de la régularité. Une proposition claire, honnête et répétée crée des opportunités sans dégrader l'expérience client.
+        </div>
+      </Section>
+    </div>
+  );
+}
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [page, setPage] = useState("dashboard");
@@ -790,6 +937,7 @@ export default function App() {
     { id: "dashboard", label: "Vue d'ensemble", icon: "📊" },
     { id: "results", label: "Résultats", icon: "📈" },
     { id: "history", label: "Historique", icon: "📅" },
+    { id: "guide", label: "Guide Ventes Mobileo", icon: "📘" },
     { id: "visits", label: "Visites", icon: "📋" },
   ];
 
@@ -858,14 +1006,20 @@ export default function App() {
       </div>
 
       <main className="main-content" style={{ maxWidth: 1100, margin: "0 auto", padding: "22px 18px" }}>
-        {error && <div style={{ marginBottom: 16 }}><ErrorBanner message={error} onRetry={() => loadAll()} /></div>}
-        {loading ? <Spinner label="Lecture des données Notion…" /> : (
+        {page === "guide" ? (
+          <GuidePage />
+        ) : (
           <>
-            {page === "dashboard" && results && <Dashboard user={user} data={results} />}
-            {page === "results" && results && <ResultsPage user={user} data={results} onRefresh={() => loadAll(true)} refreshing={refreshing} />}
-            {page === "history" && <HistoryPage user={user} history={history} />}
-            {page === "visits" && <VisitsPage user={user} visits={visits} />}
-            {!results && !error && <Spinner />}
+            {error && <div style={{ marginBottom: 16 }}><ErrorBanner message={error} onRetry={() => loadAll()} /></div>}
+            {loading ? <Spinner label="Lecture des données Notion…" /> : (
+              <>
+                {page === "dashboard" && results && <Dashboard user={user} data={results} />}
+                {page === "results" && results && <ResultsPage user={user} data={results} onRefresh={() => loadAll(true)} refreshing={refreshing} />}
+                {page === "history" && <HistoryPage user={user} history={history} />}
+                {page === "visits" && <VisitsPage user={user} visits={visits} />}
+                {!results && !error && <Spinner />}
+              </>
+            )}
           </>
         )}
       </main>
