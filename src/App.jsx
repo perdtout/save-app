@@ -616,6 +616,66 @@ function VisitsPage({ user, visits }) {
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 // ─── HISTORY PAGE — courbes de progression mois par mois ─────────────────────
+
+// Jours fériés français (fixes + mobiles via Pâques) pour une année donnée
+function joursFeries(annee) {
+  const feries = new Set([
+    `${annee}-01-01`, `${annee}-05-01`, `${annee}-05-08`, `${annee}-07-14`,
+    `${annee}-08-15`, `${annee}-11-01`, `${annee}-11-11`, `${annee}-12-25`,
+  ]);
+  // Calcul de Pâques (algorithme de Meeus)
+  const a = annee % 19, b = Math.floor(annee / 100), c = annee % 100;
+  const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const mois = Math.floor((h + l - 7 * m + 114) / 31);
+  const jour = ((h + l - 7 * m + 114) % 31) + 1;
+  const paques = new Date(annee, mois - 1, jour);
+  const addJours = (date, n) => { const dt = new Date(date); dt.setDate(dt.getDate() + n); return dt; };
+  const iso = (dt) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+  feries.add(iso(addJours(paques, 1)));   // Lundi de Pâques
+  feries.add(iso(addJours(paques, 39)));  // Ascension
+  feries.add(iso(addJours(paques, 50)));  // Lundi de Pentecôte
+  return feries;
+}
+
+// Nombre de jours travaillés (mardi→samedi, hors fériés) dans un mois,
+// jusqu'à une date limite optionnelle (incluse). Sinon tout le mois.
+function joursOuvres(annee, mois, jusquau = null) {
+  const feries = joursFeries(annee);
+  const dernierJour = new Date(annee, mois, 0).getDate();
+  const limite = jusquau != null ? Math.min(jusquau, dernierJour) : dernierJour;
+  let n = 0;
+  for (let j = 1; j <= limite; j++) {
+    const dt = new Date(annee, mois - 1, j);
+    const jourSem = dt.getDay(); // 0=dim, 1=lun, ..., 6=sam
+    const estOuvre = jourSem >= 2 && jourSem <= 6; // mardi(2) → samedi(6)
+    const iso = `${annee}-${String(mois).padStart(2, "0")}-${String(j).padStart(2, "0")}`;
+    if (estOuvre && !feries.has(iso)) n++;
+  }
+  return n;
+}
+
+// Détermine si une clé "AAAA-MM" correspond au mois en cours
+function estMoisEnCours(moisKey) {
+  const now = new Date();
+  const cur = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  return moisKey === cur;
+}
+
+// Projette la valeur d'un volume du mois en cours sur le mois complet
+function projeterVolume(valeurActuelle, moisKey) {
+  if (valeurActuelle == null) return null;
+  const [annee, mois] = moisKey.split("-").map(Number);
+  const now = new Date();
+  const jourAuj = now.getDate();
+  const ecoules = joursOuvres(annee, mois, jourAuj);
+  const total = joursOuvres(annee, mois);
+  if (ecoules <= 0) return null;
+  return { projete: Math.round((valeurActuelle / ecoules) * total), ecoules, total };
+}
+
 // ─── Analyse automatique d'une série de chiffres ─────────────────────────────
 function analyzeSeries(points, { suffix = "", target = null, higherIsBetter = true }) {
   const pts = points.filter(p => p.value != null);
@@ -678,12 +738,35 @@ function analyzeSeries(points, { suffix = "", target = null, higherIsBetter = tr
   return { phrase, couleur, icone, delta, suffix, avg, last };
 }
 
-function MiniLineChart({ data, label, suffix = "", target, color = C.accent, higherIsBetter = true }) {
+function MiniLineChart({ data, label, suffix = "", target, color = C.accent, higherIsBetter = true, isVolume = false }) {
   const points = data.filter(d => d.value != null);
   if (points.length === 0) return null;
-  const values = points.map(p => p.value);
-  const rawMax = Math.max(...values, target != null ? target : -Infinity);
-  const rawMin = Math.min(...values, target != null ? target : Infinity);
+
+  // Mois en cours : dernier point si sa clé = mois courant
+  const lastIdx = points.length - 1;
+  const lastMois = points[lastIdx]?.mois;
+  const enCours = lastMois && estMoisEnCours(lastMois);
+
+  // Projection (volumes uniquement) pour le mois en cours
+  let projection = null;
+  if (enCours && isVolume) {
+    projection = projeterVolume(points[lastIdx].value, lastMois);
+  }
+
+  // Série d'analyse : on EXCLUT le mois en cours (incomplet)
+  const analysisPoints = enCours ? points.slice(0, -1) : points;
+
+  // Points à tracer : on ajoute un point fantôme "projeté" si volume en cours
+  const drawPoints = points.map((p, i) => ({
+    ...p,
+    estEnCours: enCours && i === lastIdx,
+  }));
+
+  const values = drawPoints.map(p => p.value);
+  const projValue = projection ? projection.projete : null;
+  const allValuesForScale = projValue != null ? [...values, projValue] : values;
+  const rawMax = Math.max(...allValuesForScale, target != null ? target : -Infinity);
+  const rawMin = Math.min(...allValuesForScale, target != null ? target : Infinity);
   const span = (rawMax - rawMin) || Math.abs(rawMax) || 1;
   const maxV = rawMax + span * 0.15;
   const minV = Math.max(0, rawMin - span * 0.15);
@@ -691,11 +774,11 @@ function MiniLineChart({ data, label, suffix = "", target, color = C.accent, hig
   const W = 340, H = 150, padX = 12, padTop = 22, padBot = 26;
   const plotH = H - padTop - padBot;
   const plotW = W - padX * 2;
-  const stepX = points.length > 1 ? plotW / (points.length - 1) : 0;
-  const xy = points.map((p, i) => ({
+  const stepX = drawPoints.length > 1 ? plotW / (drawPoints.length - 1) : 0;
+  const xy = drawPoints.map((p, i) => ({
     x: padX + i * stepX,
     y: padTop + plotH - ((p.value - minV) / range) * plotH,
-    v: p.value, mois: p.mois,
+    v: p.value, mois: p.mois, estEnCours: p.estEnCours,
   }));
 
   // Courbe lissée (Catmull-Rom -> Bézier) pour un rendu plus agréable
@@ -715,24 +798,28 @@ function MiniLineChart({ data, label, suffix = "", target, color = C.accent, hig
     }
     return d;
   };
-  const linePath = smoothPath(xy);
+  // On lisse jusqu'à l'avant-dernier point si le dernier est "en cours" (trait plein),
+  // puis on relie en pointillé vers le mois en cours.
+  const solidPts = enCours ? xy.slice(0, -1) : xy;
+  const linePath = smoothPath(solidPts.length >= 2 ? solidPts : xy);
   const baseY = padTop + plotH;
-  const areaPath = `${linePath} L ${xy[xy.length - 1].x.toFixed(1)} ${baseY.toFixed(1)} L ${xy[0].x.toFixed(1)} ${baseY.toFixed(1)} Z`;
+  const refPts = solidPts.length >= 2 ? solidPts : xy;
+  const areaPath = `${linePath} L ${refPts[refPts.length - 1].x.toFixed(1)} ${baseY.toFixed(1)} L ${refPts[0].x.toFixed(1)} ${baseY.toFixed(1)} Z`;
   const targetY = target != null ? padTop + plotH - ((target - minV) / range) * plotH : null;
   const gid = `grad-${label.replace(/[^a-z]/gi, "")}`;
-  const labelEvery = points.length <= 6 ? 1 : points.length <= 12 ? 2 : 3;
-  const analysis = analyzeSeries(points, { suffix, target, higherIsBetter });
-  const last = values[values.length - 1];
+  const labelEvery = drawPoints.length <= 6 ? 1 : drawPoints.length <= 12 ? 2 : 3;
+  const analysis = analyzeSeries(analysisPoints, { suffix, target, higherIsBetter });
+  const last = enCours ? null : values[values.length - 1];
+  const lastComplete = analysisPoints.length ? analysisPoints[analysisPoints.length - 1].value : values[values.length - 1];
   const lastXY = xy[xy.length - 1];
 
-  // Lignes de grille horizontales (3 niveaux)
   const gridYs = [0.25, 0.5, 0.75].map(f => padTop + plotH * f);
 
   return (
     <Card style={{ padding: "16px 18px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
         <span style={{ fontSize: 13, fontWeight: 700, color: C.navy, letterSpacing: "0.01em" }}>{label}</span>
-        <span style={{ fontSize: 18, fontWeight: 800, color }}>{last}{suffix}</span>
+        <span style={{ fontSize: 18, fontWeight: 800, color }}>{lastComplete}{suffix}</span>
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: 150, display: "block" }}>
         <defs>
@@ -752,26 +839,53 @@ function MiniLineChart({ data, label, suffix = "", target, color = C.accent, hig
             <text x={W - padX} y={targetY - 5} textAnchor="end" fontSize="8.5" fontWeight="600" fill={C.warn}>objectif {target}{suffix}</text>
           </>
         )}
-        {/* aire + courbe */}
+        {/* aire + courbe (mois complets) */}
         <path d={areaPath} fill={`url(#${gid})`} />
         <path d={linePath} fill="none" stroke={color} strokeWidth="2.8" strokeLinejoin="round" strokeLinecap="round" />
+        {/* segment pointillé vers le mois en cours (incomplet) */}
+        {enCours && xy.length >= 2 && (
+          <line x1={xy[xy.length - 2].x} y1={xy[xy.length - 2].y} x2={lastXY.x} y2={lastXY.y}
+            stroke={color} strokeWidth="2" strokeDasharray="3 3" opacity="0.55" />
+        )}
         {/* points */}
         {xy.map((p, i) => (
-          <circle key={i} cx={p.x} cy={p.y} r={i === xy.length - 1 ? "4.5" : "2.5"} fill={i === xy.length - 1 ? color : C.white} stroke={color} strokeWidth={i === xy.length - 1 ? "2" : "1.5"} />
+          <circle key={i} cx={p.x} cy={p.y} r={i === xy.length - 1 ? "4.5" : "2.5"}
+            fill={p.estEnCours ? C.white : (i === xy.length - 1 ? color : C.white)}
+            stroke={color} strokeWidth={i === xy.length - 1 ? "2" : "1.5"}
+            strokeDasharray={p.estEnCours ? "2 1.5" : "0"} />
         ))}
-        {/* valeur du dernier point */}
-        <text x={Math.min(lastXY.x, W - padX - 14)} y={Math.max(lastXY.y - 11, padTop - 2)} textAnchor="middle" fontSize="10.5" fontWeight="800" fill={color}>{last}{suffix}</text>
+        {/* valeur du dernier point complet */}
+        {!enCours && (
+          <text x={Math.min(lastXY.x, W - padX - 14)} y={Math.max(lastXY.y - 11, padTop - 2)} textAnchor="middle" fontSize="10.5" fontWeight="800" fill={color}>{last}{suffix}</text>
+        )}
         {/* labels axe X */}
         {xy.map((p, i) => (
           (i % labelEvery === 0 || i === xy.length - 1) ? (
-            <text key={`l${i}`} x={p.x} y={H - 8} textAnchor="middle" fontSize="8.5" fill={C.gray400}>{p.mois.slice(5)}/{p.mois.slice(2, 4)}</text>
+            <text key={`l${i}`} x={p.x} y={H - 8} textAnchor="middle" fontSize="8.5"
+              fill={p.estEnCours ? C.accent : C.gray400} fontWeight={p.estEnCours ? "700" : "400"}>
+              {p.mois.slice(5)}/{p.mois.slice(2, 4)}{p.estEnCours ? "*" : ""}
+            </text>
           ) : null
         ))}
       </svg>
-      {analysis && (
+
+      {/* Bandeau mois en cours / projection */}
+      {enCours && (
+        <div style={{ marginTop: 8, padding: "8px 10px", background: C.accent + "12", borderRadius: 6, fontSize: 11, color: C.gray600, lineHeight: 1.5 }}>
+          {projection
+            ? <><strong style={{ color: C.accent }}>* {lastMois.slice(5)}/{lastMois.slice(0, 4)} en cours</strong> : {points[lastIdx].value}{suffix} à ce jour ({projection.ecoules}/{projection.total} j. travaillés). Projection fin de mois ≈ <strong style={{ color: C.navy }}>{projection.projete}{suffix}</strong>.</>
+            : <><strong style={{ color: C.accent }}>* {lastMois.slice(5)}/{lastMois.slice(0, 4)} en cours</strong> : {points[lastIdx].value}{suffix} à ce jour (mois incomplet, exclu de l'analyse de tendance).</>}
+        </div>
+      )}
+
+      {analysis ? (
         <div style={{ marginTop: 10, paddingTop: 11, borderTop: `1px solid ${C.gray50}`, display: "flex", gap: 8, alignItems: "flex-start" }}>
           <span style={{ fontSize: 14, flexShrink: 0, lineHeight: 1.3 }}>{analysis.icone}</span>
           <span style={{ fontSize: 12, color: C.text, lineHeight: 1.55 }}>{analysis.phrase}</span>
+        </div>
+      ) : (
+        <div style={{ marginTop: 10, paddingTop: 11, borderTop: `1px solid ${C.gray50}`, fontSize: 11.5, color: C.gray400, fontStyle: "italic" }}>
+          Pas assez de mois complets pour analyser la tendance.
         </div>
       )}
     </Card>
@@ -826,10 +940,10 @@ function HistoryPage({ user, history }) {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 12 }}>
           <MiniLineChart data={mkSeries("accessoires")} label="Ratio Accessoires" suffix="%" target={25} color="#E8612C" />
           <MiniLineChart data={mkSeries("gp")} label="Ratio GP" suffix="%" target={20} color="#FF8A50" />
-          <MiniLineChart data={mkSeries("occasion")} label="Mobiles Occasion" suffix="" target={storeData[storeData.length - 1]?.objectifOccasion} color="#C04A1E" />
-          <MiniLineChart data={mkSeries("mobileo")} label="Forfaits Mobileo" suffix="" target={10} color="#E8612C" />
+          <MiniLineChart data={mkSeries("occasion")} label="Mobiles Occasion" suffix="" target={storeData[storeData.length - 1]?.objectifOccasion} color="#C04A1E" isVolume />
+          <MiniLineChart data={mkSeries("mobileo")} label="Forfaits Mobileo" suffix="" target={10} color="#E8612C" isVolume />
           <MiniLineChart data={mkSeries("atm")} label="Ratio ATM" suffix="%" target={10} color="#FF8A50" />
-          <MiniLineChart data={mkSeries("margeTotale")} label="Marge Totale" suffix="€" color="#2B2B2B" />
+          <MiniLineChart data={mkSeries("margeTotale")} label="Marge Totale" suffix="€" color="#2B2B2B" isVolume />
         </div>
       )}
     </div>
