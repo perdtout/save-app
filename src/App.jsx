@@ -616,67 +616,181 @@ function VisitsPage({ user, visits }) {
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 // ─── HISTORY PAGE — courbes de progression mois par mois ─────────────────────
-function MiniLineChart({ data, label, suffix = "", target, color = C.accent }) {
-  // data : [{ mois, value }]
+// ─── Analyse automatique d'une série de chiffres ─────────────────────────────
+function analyzeSeries(points, { suffix = "", target = null, higherIsBetter = true }) {
+  const pts = points.filter(p => p.value != null);
+  if (pts.length < 2) return null;
+  const vals = pts.map(p => p.value);
+  const first = vals[0], last = vals[vals.length - 1];
+  const delta = +(last - first).toFixed(1);
+  const maxV = Math.max(...vals), minV = Math.min(...vals);
+  const avg = +(vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1);
+
+  // Régularité : écart-type relatif (variations mois à mois)
+  const diffs = [];
+  for (let i = 1; i < vals.length; i++) diffs.push(Math.abs(vals[i] - vals[i - 1]));
+  const avgDiff = diffs.reduce((a, b) => a + b, 0) / diffs.length;
+  const amplitude = maxV - minV;
+  const regulier = amplitude === 0 ? true : (avgDiff / (Math.abs(avg) || 1)) < 0.15;
+
+  // Tendance sur les 3 derniers points
+  const recent = vals.slice(-3);
+  const recentTrend = recent.length >= 2 ? recent[recent.length - 1] - recent[0] : 0;
+
+  // Détermination du sens
+  let sens, couleur, icone;
+  const seuil = Math.max(0.1, Math.abs(avg) * 0.02);
+  if (Math.abs(delta) <= seuil) { sens = "stable"; couleur = C.gray600; icone = "➡️"; }
+  else {
+    const positif = higherIsBetter ? delta > 0 : delta < 0;
+    sens = delta > 0 ? "hausse" : "baisse";
+    couleur = positif ? C.ok : C.bad;
+    icone = delta > 0 ? "📈" : "📉";
+  }
+
+  // Construction de la phrase
+  const fmt = (v) => `${v}${suffix}`;
+  const nbMois = pts.length;
+  let phrase = "";
+  if (sens === "stable") {
+    phrase = `Stable autour de ${fmt(avg)} sur ${nbMois} mois.`;
+  } else {
+    const motSens = sens === "hausse" ? "Progression" : "Repli";
+    phrase = `${motSens} de ${delta > 0 ? "+" : ""}${fmt(delta)} sur ${nbMois} mois (de ${fmt(first)} à ${fmt(last)}).`;
+  }
+  // régularité
+  phrase += regulier ? ` Évolution régulière.` : ` Évolution irrégulière (de ${fmt(minV)} à ${fmt(maxV)}).`;
+  // inflexion récente
+  if (pts.length >= 4 && Math.abs(recentTrend) > seuil) {
+    const recOk = higherIsBetter ? recentTrend > 0 : recentTrend < 0;
+    phrase += recentTrend > 0
+      ? ` Tendance récente à la hausse${recOk ? " 👍" : ""}.`
+      : ` Tendance récente à la baisse${recOk ? "" : " ⚠️"}.`;
+  }
+  // objectif
+  if (target != null) {
+    const okCount = vals.filter(v => higherIsBetter ? v >= target : v <= target).length;
+    if (okCount === nbMois) phrase += ` Objectif (${fmt(target)}) tenu sur toute la période.`;
+    else if (okCount === 0) phrase += ` Jamais au niveau de l'objectif (${fmt(target)}).`;
+    else phrase += ` Objectif atteint ${okCount}/${nbMois} mois.`;
+  }
+
+  return { phrase, couleur, icone, delta, suffix, avg, last };
+}
+
+function MiniLineChart({ data, label, suffix = "", target, color = C.accent, higherIsBetter = true }) {
   const points = data.filter(d => d.value != null);
   if (points.length === 0) return null;
   const values = points.map(p => p.value);
-  const maxV = Math.max(...values, target || 0) * 1.1;
-  const minV = Math.min(...values, 0);
-  const range = maxV - minV || 1;
-  const W = 280, H = 90, pad = 8;
-  const stepX = points.length > 1 ? (W - pad * 2) / (points.length - 1) : 0;
+  const rawMax = Math.max(...values, target != null ? target : -Infinity);
+  const rawMin = Math.min(...values, target != null ? target : Infinity);
+  const span = (rawMax - rawMin) || Math.abs(rawMax) || 1;
+  const maxV = rawMax + span * 0.15;
+  const minV = Math.max(0, rawMin - span * 0.15);
+  const range = (maxV - minV) || 1;
+  const W = 340, H = 150, padX = 12, padTop = 22, padBot = 26;
+  const plotH = H - padTop - padBot;
+  const plotW = W - padX * 2;
+  const stepX = points.length > 1 ? plotW / (points.length - 1) : 0;
   const xy = points.map((p, i) => ({
-    x: pad + i * stepX,
-    y: H - pad - ((p.value - minV) / range) * (H - pad * 2),
+    x: padX + i * stepX,
+    y: padTop + plotH - ((p.value - minV) / range) * plotH,
     v: p.value, mois: p.mois,
   }));
-  const path = xy.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
-  const targetY = target != null ? H - pad - ((target - minV) / range) * (H - pad * 2) : null;
-  const last = points[points.length - 1].value;
-  const first = points[0].value;
-  const delta = last - first;
+
+  // Courbe lissée (Catmull-Rom -> Bézier) pour un rendu plus agréable
+  const smoothPath = (pts) => {
+    if (pts.length < 2) return "";
+    let d = `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[i - 1] || pts[i];
+      const p1 = pts[i];
+      const p2 = pts[i + 1];
+      const p3 = pts[i + 2] || p2;
+      const c1x = p1.x + (p2.x - p0.x) / 6;
+      const c1y = p1.y + (p2.y - p0.y) / 6;
+      const c2x = p2.x - (p3.x - p1.x) / 6;
+      const c2y = p2.y - (p3.y - p1.y) / 6;
+      d += ` C ${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${c2x.toFixed(1)} ${c2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+    }
+    return d;
+  };
+  const linePath = smoothPath(xy);
+  const baseY = padTop + plotH;
+  const areaPath = `${linePath} L ${xy[xy.length - 1].x.toFixed(1)} ${baseY.toFixed(1)} L ${xy[0].x.toFixed(1)} ${baseY.toFixed(1)} Z`;
+  const targetY = target != null ? padTop + plotH - ((target - minV) / range) * plotH : null;
+  const gid = `grad-${label.replace(/[^a-z]/gi, "")}`;
+  const labelEvery = points.length <= 6 ? 1 : points.length <= 12 ? 2 : 3;
+  const analysis = analyzeSeries(points, { suffix, target, higherIsBetter });
+  const last = values[values.length - 1];
+  const lastXY = xy[xy.length - 1];
+
+  // Lignes de grille horizontales (3 niveaux)
+  const gridYs = [0.25, 0.5, 0.75].map(f => padTop + plotH * f);
 
   return (
-    <Card>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: C.gray600, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</span>
-        <span style={{ fontSize: 11, fontWeight: 700, color: delta > 0 ? C.ok : delta < 0 ? C.bad : C.gray400 }}>
-          {points.length > 1 ? (delta > 0 ? `📈 +${delta.toFixed(1)}${suffix}` : delta < 0 ? `📉 ${delta.toFixed(1)}${suffix}` : "➡️ stable") : ""}
-        </span>
+    <Card style={{ padding: "16px 18px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: C.navy, letterSpacing: "0.01em" }}>{label}</span>
+        <span style={{ fontSize: 18, fontWeight: 800, color }}>{last}{suffix}</span>
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: 90 }}>
-        {targetY != null && (
-          <line x1={pad} y1={targetY} x2={W - pad} y2={targetY} stroke={C.navy} strokeWidth="1" strokeDasharray="3 3" opacity="0.25" />
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: 150, display: "block" }}>
+        <defs>
+          <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.25" />
+            <stop offset="100%" stopColor={color} stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
+        {/* grille */}
+        {gridYs.map((gy, i) => (
+          <line key={i} x1={padX} y1={gy} x2={W - padX} y2={gy} stroke={C.gray50} strokeWidth="1" />
+        ))}
+        {/* ligne objectif */}
+        {targetY != null && targetY > padTop && targetY < baseY && (
+          <>
+            <line x1={padX} y1={targetY} x2={W - padX} y2={targetY} stroke={C.warn} strokeWidth="1.2" strokeDasharray="5 3" opacity="0.7" />
+            <text x={W - padX} y={targetY - 5} textAnchor="end" fontSize="8.5" fontWeight="600" fill={C.warn}>objectif {target}{suffix}</text>
+          </>
         )}
-        <path d={path} fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+        {/* aire + courbe */}
+        <path d={areaPath} fill={`url(#${gid})`} />
+        <path d={linePath} fill="none" stroke={color} strokeWidth="2.8" strokeLinejoin="round" strokeLinecap="round" />
+        {/* points */}
         {xy.map((p, i) => (
-          <g key={i}>
-            <circle cx={p.x} cy={p.y} r="3.5" fill={color} />
-            {(i === xy.length - 1 || xy.length <= 4) && (
-              <text x={p.x} y={p.y - 8} textAnchor="middle" fontSize="10" fontWeight="700" fill={C.navy}>{p.v}{suffix}</text>
-            )}
-          </g>
+          <circle key={i} cx={p.x} cy={p.y} r={i === xy.length - 1 ? "4.5" : "2.5"} fill={i === xy.length - 1 ? color : C.white} stroke={color} strokeWidth={i === xy.length - 1 ? "2" : "1.5"} />
+        ))}
+        {/* valeur du dernier point */}
+        <text x={Math.min(lastXY.x, W - padX - 14)} y={Math.max(lastXY.y - 11, padTop - 2)} textAnchor="middle" fontSize="10.5" fontWeight="800" fill={color}>{last}{suffix}</text>
+        {/* labels axe X */}
+        {xy.map((p, i) => (
+          (i % labelEvery === 0 || i === xy.length - 1) ? (
+            <text key={`l${i}`} x={p.x} y={H - 8} textAnchor="middle" fontSize="8.5" fill={C.gray400}>{p.mois.slice(5)}/{p.mois.slice(2, 4)}</text>
+          ) : null
         ))}
       </svg>
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 2 }}>
-        {xy.map((p, i) => (
-          <span key={i} style={{ fontSize: 9, color: C.gray400, flex: 1, textAlign: "center" }}>{p.mois.slice(5)}/{p.mois.slice(2, 4)}</span>
-        ))}
-      </div>
+      {analysis && (
+        <div style={{ marginTop: 10, paddingTop: 11, borderTop: `1px solid ${C.gray50}`, display: "flex", gap: 8, alignItems: "flex-start" }}>
+          <span style={{ fontSize: 14, flexShrink: 0, lineHeight: 1.3 }}>{analysis.icone}</span>
+          <span style={{ fontSize: 12, color: C.text, lineHeight: 1.55 }}>{analysis.phrase}</span>
+        </div>
+      )}
     </Card>
   );
 }
 
 function HistoryPage({ user, history }) {
   const isRZ = user.role === "rz";
-  const allStores = isRZ ? STORES_ORDER : [user.store];
   const [selStore, setSelStore] = useState(isRZ ? STORES_ORDER[0] : user.store);
   const byStore = history?.byStore || {};
   const months = history?.months || [];
 
-  const storeData = byStore[selStore] || [];
+  // Fenêtre glissante : 18 derniers mois maximum
+  const fullData = byStore[selStore] || [];
+  const storeData = fullData.slice(-18);
   const mkSeries = (key) => storeData.map(r => ({ mois: r.mois, value: r[key] }));
+  const periodeLabel = storeData.length
+    ? `${storeData[0].mois} → ${storeData[storeData.length - 1].mois} (${storeData.length} mois)`
+    : "";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
@@ -684,7 +798,7 @@ function HistoryPage({ user, history }) {
         <div>
           <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: C.navy }}>Historique & progression</h2>
           <p style={{ margin: "2px 0 0", fontSize: 12, color: C.gray400 }}>
-            {months.length} mois archivé{months.length > 1 ? "s" : ""}{months.length ? ` · de ${months[0]} à ${months[months.length - 1]}` : ""}
+            {isRZ ? selStore : "Votre magasin"}{periodeLabel ? ` · ${periodeLabel}` : ""}
           </p>
         </div>
         {isRZ && (
@@ -705,49 +819,18 @@ function HistoryPage({ user, history }) {
       ) : storeData.length < 2 ? (
         <Card accent={C.accent}>
           <div style={{ fontSize: 13, color: C.gray600, lineHeight: 1.6 }}>
-            <strong style={{ color: C.navy }}>{selStore}</strong> — un seul mois archivé pour l'instant ({storeData[0]?.mois}). Les courbes de progression apparaîtront dès qu'un deuxième mois sera enregistré. Patience, l'historique se construit mois après mois !
+            <strong style={{ color: C.navy }}>{selStore}</strong> — un seul mois archivé pour l'instant ({storeData[0]?.mois}). Les courbes de progression apparaîtront dès qu'un deuxième mois sera enregistré.
           </div>
         </Card>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 }}>
-          <MiniLineChart data={mkSeries("accessoires")} label="Ratio Accessoires" suffix="%" target={25} color={C.accent} />
-          <MiniLineChart data={mkSeries("gp")} label="Ratio GP" suffix="%" target={20} color="#8B5CF6" />
-          <MiniLineChart data={mkSeries("occasion")} label="Mobiles Occasion" suffix="" target={storeData[storeData.length - 1]?.objectifOccasion} color="#0EA5E9" />
-          <MiniLineChart data={mkSeries("mobileo")} label="Forfaits Mobileo" suffix="" target={10} color="#F59E0B" />
-          <MiniLineChart data={mkSeries("atm")} label="Ratio ATM" suffix="%" target={10} color="#22C55E" />
-          <MiniLineChart data={mkSeries("margeTotale")} label="Marge Totale" suffix="€" color={C.navy} />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 12 }}>
+          <MiniLineChart data={mkSeries("accessoires")} label="Ratio Accessoires" suffix="%" target={25} color="#E8612C" />
+          <MiniLineChart data={mkSeries("gp")} label="Ratio GP" suffix="%" target={20} color="#FF8A50" />
+          <MiniLineChart data={mkSeries("occasion")} label="Mobiles Occasion" suffix="" target={storeData[storeData.length - 1]?.objectifOccasion} color="#C04A1E" />
+          <MiniLineChart data={mkSeries("mobileo")} label="Forfaits Mobileo" suffix="" target={10} color="#E8612C" />
+          <MiniLineChart data={mkSeries("atm")} label="Ratio ATM" suffix="%" target={10} color="#FF8A50" />
+          <MiniLineChart data={mkSeries("margeTotale")} label="Marge Totale" suffix="€" color="#2B2B2B" />
         </div>
-      )}
-
-      {/* Comparaison année sur année si plusieurs années */}
-      {storeData.length >= 2 && (
-        <Card>
-          <SectionHead>📊 Détail mois par mois — {selStore}</SectionHead>
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-              <thead>
-                <tr style={{ borderBottom: `2px solid ${C.gray50}` }}>
-                  {["Mois", "Acc.", "GP", "Occ.", "Mobileo", "ATM", "Marge"].map(h => (
-                    <th key={h} style={{ textAlign: h === "Mois" ? "left" : "right", padding: "7px 8px", fontSize: 10, fontWeight: 700, color: C.gray400, textTransform: "uppercase" }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {storeData.map((r, i) => (
-                  <tr key={i} style={{ background: i % 2 ? C.bg : C.white }}>
-                    <td style={{ padding: "7px 8px", fontWeight: 700, color: C.navy }}>{r.mois}</td>
-                    <td style={{ padding: "7px 8px", textAlign: "right", color: r.accessoires >= 25 ? C.ok : C.bad, fontWeight: 600 }}>{r.accessoires ?? "—"}%</td>
-                    <td style={{ padding: "7px 8px", textAlign: "right", color: r.gp >= 20 ? C.ok : C.bad, fontWeight: 600 }}>{r.gp ?? "—"}%</td>
-                    <td style={{ padding: "7px 8px", textAlign: "right" }}>{r.occasion ?? "—"}</td>
-                    <td style={{ padding: "7px 8px", textAlign: "right", color: r.mobileo >= 10 ? C.ok : C.bad, fontWeight: 600 }}>{r.mobileo ?? "—"}</td>
-                    <td style={{ padding: "7px 8px", textAlign: "right", color: r.atm >= 10 ? C.ok : C.bad, fontWeight: 600 }}>{r.atm ?? "—"}%</td>
-                    <td style={{ padding: "7px 8px", textAlign: "right", color: C.gray600 }}>{r.margeTotale ? `${r.margeTotale.toLocaleString("fr-FR")}€` : "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
       )}
     </div>
   );
