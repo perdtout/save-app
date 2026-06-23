@@ -63,7 +63,7 @@ const GOAT_DATA_FALLBACK = {
     ],
   },
   titlesHistory: [
-    { type: "month", label: "Mai 2026",       winner: "Mathis",   score: 63.0  },
+    { type: "month", label: "Mai 2026",       winner: "Jérôme",   score: 86.0  },
     { type: "month", label: "Avril 2026",     winner: "Jérôme",   score: 100.0 },
     { type: "month", label: "Mars 2026",      winner: "Jérôme",   score: 95.0  },
     { type: "month", label: "Février 2026",   winner: "Nassim",   score: 89.1  },
@@ -72,6 +72,9 @@ const GOAT_DATA_FALLBACK = {
     { type: "month", label: "Novembre 2025",  winner: "Jérôme",   score: 82.1  },
     { type: "month", label: "Octobre 2025",   winner: "Jérôme",   score: 80.0  },
     { type: "month", label: "Septembre 2025", winner: "Jérôme",   score: 100.0 },
+    { type: "month", label: "Août 2025",      winner: "Nassim",   score: 65.8  },
+    { type: "month", label: "Juillet 2025",   winner: "Jérôme",   score: 86.3  },
+    { type: "month", label: "Juin 2025",      winner: "Jérôme",   score: 80.8  },
     { type: "week",  label: "09–13 juin 2026 (co-MVP)", winner: "Mathis",  score: 80.0 },
     { type: "week",  label: "09–13 juin 2026 (co-MVP)", winner: "Jérôme",  score: 80.0 },
   ],
@@ -1069,7 +1072,7 @@ function GoatPage({ user, goatData, onRefresh, refreshing }) {
             boxShadow: `0 6px 18px ${GOAT_GOLD}55`,
           }}>🐐</div>
           <div style={{ flex: 1, minWidth: 200 }}>
-            <div style={{ fontSize: 11, color: C.accentB, textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 800 }}>GOAT de la saison · Juin 2025 – Mai 2026</div>
+            <div style={{ fontSize: 11, color: C.accentB, textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 800 }}>GOAT de la saison · Juin 2025 – Juin 2026</div>
             {goat ? (
               <>
                 <div style={{ fontSize: 26, fontWeight: 900, color: C.white, marginTop: 4 }}>{goat.name}</div>
