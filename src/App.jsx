@@ -830,8 +830,35 @@ function MiniLineChart({ data, label, suffix = "", target, color = C.accent, hig
 
 function HistoryPage({ user, history }) {
   const isRZ = user.role === "rz";
+  const stores = isRZ ? STORES_ORDER : [user.store];
+
+  // Vue courante : "graphiques" (existante) | "comparaison" | "tableau"
+  const [tab, setTab] = useState("graphiques");
   const [activeStore, setActiveStore] = useState(isRZ ? "all" : user.store);
-  if (!history || !history.months || history.months.length === 0) {
+  const [selectedMonth, setSelectedMonth] = useState(null);
+  const [tableStore, setTableStore] = useState(stores[0]);
+
+  const OCCASION_OBJ = { "Pontarlier": 50, "Lons-le-Saunier": 50, "Dijon": 25, "Besançon": 20, "Chalon-sur-Saône": 15 };
+  const MOIS_FR = { "01":"Janv.","02":"Févr.","03":"Mars","04":"Avr.","05":"Mai","06":"Juin","07":"Juil.","08":"Août","09":"Sept.","10":"Oct.","11":"Nov.","12":"Déc." };
+  const moisLabel = (k) => { if (!k) return "—"; const [y, m] = k.split("-"); return `${MOIS_FR[m] || m} ${y}`; };
+
+  // byStore est un objet { [magasin]: [{ mois, accessoires, gp, occasion, mobileo, margeTotale, atm }] }
+  // On le convertit en byStore[magasin][mois] = row pour accès rapide
+  const byStoreMois = {};
+  if (history?.byStore) {
+    for (const [store, rows] of Object.entries(history.byStore)) {
+      byStoreMois[store] = {};
+      for (const row of (Array.isArray(rows) ? rows : [])) {
+        if (row.mois) byStoreMois[store][row.mois] = row;
+      }
+    }
+  }
+
+  const allMonths = (history?.months || []).slice().sort();
+  // Initialise le mois sélectionné au plus récent dès que les données arrivent
+  const effectiveMonth = selectedMonth || allMonths[allMonths.length - 1] || null;
+
+  if (!history || !allMonths.length) {
     return (
       <Card>
         <div style={{ textAlign: "center", padding: "28px 0", color: C.gray400 }}>
@@ -841,39 +868,89 @@ function HistoryPage({ user, history }) {
       </Card>
     );
   }
-  const stores = isRZ ? STORES_ORDER : [user.store];
-  const displayStores = activeStore === "all" ? stores : [activeStore];
-  const months = history.months;
 
-  const buildSeries = (storeKey, kpi) => months.map(m => {
-    const row = history.byStore?.[storeKey]?.[m];
+  // ─── Série pour MiniLineChart (champs backend : accessoires/gp/occasion/mobileo/margeTotale/atm)
+  const buildSeries = (storeKey, kpi) => allMonths.map(m => {
+    const row = byStoreMois[storeKey]?.[m];
     let value = null;
-    if (kpi === "acc" && row?.ratioAcc != null) value = row.ratioAcc;
-    if (kpi === "gp" && row?.ratioGP != null) value = row.ratioGP;
-    if (kpi === "occ" && row?.volumeOcc != null) value = row.volumeOcc;
-    if (kpi === "mobileo" && row?.totalMobileo != null) value = row.totalMobileo;
-    if (kpi === "atm" && row?.ratioAtm != null) value = row.ratioAtm;
+    if (kpi === "acc"    && row?.accessoires != null)  value = row.accessoires;
+    if (kpi === "gp"     && row?.gp != null)           value = row.gp;
+    if (kpi === "occ"    && row?.occasion != null)     value = row.occasion;
+    if (kpi === "mobileo"&& row?.mobileo != null)      value = row.mobileo;
+    if (kpi === "atm"    && row?.atm != null)          value = row.atm;
     return { mois: m, value };
   });
 
-  const OCCASION_OBJ = { "Pontarlier": 50, "Lons-le-Saunier": 50, "Dijon": 25, "Besançon": 20, "Chalon-sur-Saône": 15 };
+  // ─── Évolution en % entre deux valeurs
+  const evo = (vN, vNm1) => {
+    if (vN == null || vNm1 == null || vNm1 === 0) return null;
+    return ((vN - vNm1) / Math.abs(vNm1) * 100).toFixed(1);
+  };
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: C.navy }}>Historique mensuel</h2>
-          <p style={{ margin: "2px 0 0", fontSize: 12, color: C.gray400 }}>Évolution des KPIs sur {months.length} mois · {months[0]} → {months[months.length - 1]}</p>
-        </div>
-        {isRZ && (
-          <select value={activeStore} onChange={e => setActiveStore(e.target.value)}
-            style={{ border: `1.5px solid ${C.gray200}`, borderRadius: 8, padding: "7px 12px", fontSize: 13, fontFamily: "inherit", color: C.navy, background: C.white, cursor: "pointer" }}>
-            <option value="all">🏢 Tous les magasins</option>
-            {STORES_ORDER.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-        )}
-      </div>
+  const EvoChip = ({ pct }) => {
+    if (pct == null) return <span style={{ color: C.gray200, fontSize: 11 }}>—</span>;
+    const v = parseFloat(pct);
+    const color = v > 0 ? C.ok : v < 0 ? C.bad : C.gray400;
+    const arrow = v > 0 ? "▲" : v < 0 ? "▼" : "=";
+    return <span style={{ fontSize: 11, fontWeight: 700, color }}>{arrow} {Math.abs(v)}%</span>;
+  };
 
+  const kpiColor = (key, val) => {
+    if (val == null) return C.gray200;
+    if (key === "acc") return val >= 25 ? C.ok : val >= 22 ? C.warn : C.bad;
+    if (key === "gp")  return val >= 20 ? C.ok : val >= 17 ? C.warn : C.bad;
+    return C.text;
+  };
+
+  const TabBtn = ({ id, label }) => (
+    <button onClick={() => setTab(id)} style={{
+      padding: "6px 14px", borderRadius: 8, border: "none",
+      background: tab === id ? C.accent : C.gray50,
+      color: tab === id ? C.white : C.gray600,
+      fontWeight: tab === id ? 700 : 500, fontSize: 12,
+      cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
+    }}>{label}</button>
+  );
+
+  const TH = ({ children, align = "left" }) => (
+    <th style={{ textAlign: align, padding: "7px 9px", fontSize: 10, fontWeight: 700, color: C.gray400, textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: `2px solid ${C.gray50}`, whiteSpace: "nowrap" }}>{children}</th>
+  );
+  const TD = ({ children, align = "left", bold, dim }) => (
+    <td style={{ padding: "8px 9px", fontSize: 12, textAlign: align, fontWeight: bold ? 700 : 400, color: dim ? C.gray400 : undefined, verticalAlign: "middle" }}>{children}</td>
+  );
+
+  const KPI_COLS = [
+    { key: "margeTotale", label: "Marge €",    fmt: v => v != null ? `${Math.round(v).toLocaleString("fr-FR")} €` : "—" },
+    { key: "acc",         label: "Acc. %",      fmt: v => v != null ? `${v}%` : "—" },
+    { key: "gp",          label: "GP %",        fmt: v => v != null ? `${v}%` : "—" },
+    { key: "occ",         label: "Mob. Occ.",   fmt: v => v != null ? `${v}` : "—" },
+    { key: "mobileo",     label: "Mobileo",     fmt: v => v != null ? `${v}` : "—" },
+  ];
+
+  // Accès simplifié à une valeur depuis byStoreMois
+  const getVal = (store, mois, key) => {
+    const row = byStoreMois[store]?.[mois];
+    if (!row) return null;
+    if (key === "margeTotale") return row.margeTotale ?? null;
+    if (key === "acc")         return row.accessoires ?? null;
+    if (key === "gp")          return row.gp ?? null;
+    if (key === "occ")         return row.occasion ?? null;
+    if (key === "mobileo")     return row.mobileo ?? null;
+    return null;
+  };
+
+  // ─── VUE GRAPHIQUES (existante) ───────────────────────────────────────────
+  const displayStores = activeStore === "all" ? stores : [activeStore];
+
+  const renderGraphiques = () => (
+    <>
+      {isRZ && (
+        <select value={activeStore} onChange={e => setActiveStore(e.target.value)}
+          style={{ alignSelf: "flex-end", border: `1.5px solid ${C.gray200}`, borderRadius: 8, padding: "6px 12px", fontSize: 13, fontFamily: "inherit", color: C.navy, background: C.white, cursor: "pointer" }}>
+          <option value="all">🏢 Tous les magasins</option>
+          {STORES_ORDER.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+      )}
       {displayStores.map(store => (
         <Card key={store}>
           <div style={{ fontWeight: 800, fontSize: 14, color: C.navy, marginBottom: 14 }}>{store}</div>
@@ -886,6 +963,200 @@ function HistoryPage({ user, history }) {
           </div>
         </Card>
       ))}
+    </>
+  );
+
+  // ─── VUE COMPARAISON N / N-1 / N-2 ──────────────────────────────────────
+  const renderComparaison = () => {
+    if (!effectiveMonth) return null;
+    const [y, mm] = effectiveMonth.split("-");
+    const keyN   = effectiveMonth;
+    const keyNm1 = `${parseInt(y) - 1}-${mm}`;
+    const keyNm2 = `${parseInt(y) - 2}-${mm}`;
+
+    return (
+      <>
+        {/* Sélecteur de mois */}
+        <Card style={{ padding: "12px 16px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: C.navy }}>📅 Mois :</span>
+            <select value={effectiveMonth} onChange={e => setSelectedMonth(e.target.value)}
+              style={{ border: `1.5px solid ${C.gray200}`, borderRadius: 8, padding: "5px 10px", fontSize: 13, fontFamily: "inherit", color: C.navy, background: C.white, cursor: "pointer" }}>
+              {allMonths.slice().reverse().map(m => <option key={m} value={m}>{moisLabel(m)}</option>)}
+            </select>
+            <div style={{ fontSize: 12, color: C.gray400 }}>
+              <strong style={{ color: C.navy }}>{moisLabel(keyN)}</strong>
+              {" vs "}<strong>{moisLabel(keyNm1)}</strong>
+              {" vs "}<strong>{moisLabel(keyNm2)}</strong>
+            </div>
+          </div>
+        </Card>
+
+        {stores.map(store => {
+          const hasN = KPI_COLS.some(c => getVal(store, keyN, c.key) != null);
+          return (
+            <Card key={store}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+                <div style={{ fontWeight: 800, fontSize: 14, color: C.navy }}>{store}</div>
+                {!hasN && <span style={{ fontSize: 11, color: C.warn, background: C.warn + "22", padding: "2px 8px", borderRadius: 10, fontWeight: 600 }}>Données manquantes pour {moisLabel(keyN)}</span>}
+              </div>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 540 }}>
+                  <thead>
+                    <tr>
+                      <TH>Indicateur</TH>
+                      <TH align="right">{moisLabel(keyN)}</TH>
+                      <TH align="center">vs N-1</TH>
+                      <TH align="right">{moisLabel(keyNm1)}</TH>
+                      <TH align="center">vs N-2</TH>
+                      <TH align="right">{moisLabel(keyNm2)}</TH>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {KPI_COLS.map((col, i) => {
+                      const vN   = getVal(store, keyN,   col.key);
+                      const vNm1 = getVal(store, keyNm1, col.key);
+                      const vNm2 = getVal(store, keyNm2, col.key);
+                      const isMobPre = col.key === "mobileo" && keyNm2 < "2024-03";
+                      return (
+                        <tr key={col.key} style={{ background: i % 2 === 0 ? C.white : C.bg }}>
+                          <TD bold>{col.label}</TD>
+                          <TD align="right">
+                            <span style={{ fontWeight: 700, color: kpiColor(col.key, vN) }}>{col.fmt(vN)}</span>
+                          </TD>
+                          <TD align="center"><EvoChip pct={evo(vN, vNm1)} /></TD>
+                          <TD align="right" dim>{col.fmt(vNm1)}</TD>
+                          <TD align="center">
+                            {isMobPre ? <span style={{ fontSize: 11, color: C.gray200 }}>N/A</span> : <EvoChip pct={evo(vN, vNm2)} />}
+                          </TD>
+                          <TD align="right" dim>
+                            {isMobPre ? <span style={{ fontSize: 11, color: C.gray200 }}>N/A</span> : col.fmt(vNm2)}
+                          </TD>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          );
+        })}
+      </>
+    );
+  };
+
+  // ─── VUE TABLEAU CHRONOLOGIQUE ───────────────────────────────────────────
+  const renderTableau = () => {
+    const storeMonths = byStoreMois[tableStore] ? Object.keys(byStoreMois[tableStore]).sort() : [];
+    return (
+      <>
+        {/* Sélecteur magasin */}
+        <Card style={{ padding: "12px 16px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: C.navy }}>🏪 Magasin :</span>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {stores.map(s => (
+                <button key={s} onClick={() => setTableStore(s)} style={{
+                  padding: "4px 11px", borderRadius: 7, border: "none",
+                  background: tableStore === s ? C.navy : C.gray50,
+                  color: tableStore === s ? C.white : C.gray600,
+                  fontWeight: tableStore === s ? 700 : 500, fontSize: 12,
+                  cursor: "pointer", fontFamily: "inherit",
+                }}>{s}</button>
+              ))}
+            </div>
+          </div>
+        </Card>
+
+        <Card>
+          <SectionHead>{tableStore} — Évolution mensuelle complète</SectionHead>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
+              <thead>
+                <tr>
+                  <TH>Mois</TH>
+                  <TH align="right">Marge €</TH>
+                  <TH align="center">Évol.</TH>
+                  <TH align="right">Acc. %</TH>
+                  <TH align="right">GP %</TH>
+                  <TH align="right">Mob. Occ.</TH>
+                  <TH align="right">Mobileo</TH>
+                </tr>
+              </thead>
+              <tbody>
+                {storeMonths.map((m, i) => {
+                  const row = byStoreMois[tableStore]?.[m] || {};
+                  const prevKey = i > 0 ? storeMonths[i - 1] : null;
+                  const prevRow = prevKey ? byStoreMois[tableStore]?.[prevKey] : null;
+                  const evoMarge = prevRow ? evo(row.margeTotale, prevRow.margeTotale) : null;
+                  const isNewYear = i > 0 && m.endsWith("-01");
+                  const isMobPre = m < "2024-03";
+                  return (
+                    <tr key={m} style={{
+                      background: i % 2 === 0 ? C.white : C.bg,
+                      borderTop: isNewYear ? `2px solid ${C.gray200}` : undefined,
+                    }}>
+                      <td style={{ padding: "8px 9px", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" }}>
+                        {isNewYear && <span style={{ fontSize: 10, color: C.accent, fontWeight: 800, marginRight: 5 }}>{m.split("-")[0]}</span>}
+                        {moisLabel(m)}
+                      </td>
+                      <TD align="right">
+                        <span style={{ fontWeight: 700, color: C.navy }}>
+                          {row.margeTotale != null ? `${Math.round(row.margeTotale).toLocaleString("fr-FR")} €` : "—"}
+                        </span>
+                      </TD>
+                      <TD align="center"><EvoChip pct={evoMarge} /></TD>
+                      <TD align="right">
+                        <span style={{ fontWeight: 700, color: kpiColor("acc", row.accessoires) }}>
+                          {row.accessoires != null ? `${row.accessoires}%` : "—"}
+                        </span>
+                      </TD>
+                      <TD align="right">
+                        <span style={{ fontWeight: 700, color: kpiColor("gp", row.gp) }}>
+                          {row.gp != null ? `${row.gp}%` : "—"}
+                        </span>
+                      </TD>
+                      <TD align="right">{row.occasion != null ? row.occasion : "—"}</TD>
+                      <TD align="right">
+                        {isMobPre ? <span style={{ fontSize: 11, color: C.gray200 }}>N/A</span> : (row.mobileo != null ? row.mobileo : "—")}
+                      </TD>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div style={{ marginTop: 10, display: "flex", gap: 14, flexWrap: "wrap", fontSize: 11, color: C.gray400 }}>
+            <span><span style={{ color: C.ok, fontWeight: 700 }}>●</span> Acc. ≥25% / GP ≥20%</span>
+            <span><span style={{ color: C.warn, fontWeight: 700 }}>●</span> Acc. ≥22% / GP ≥17%</span>
+            <span><span style={{ color: C.bad, fontWeight: 700 }}>●</span> Sous objectif</span>
+            <span style={{ color: C.gray200 }}>N/A = Mobileo démarré Mars 2024</span>
+          </div>
+        </Card>
+      </>
+    );
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Header */}
+      <div>
+        <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: C.navy }}>Historique mensuel</h2>
+        <p style={{ margin: "2px 0 0", fontSize: 12, color: C.gray400 }}>
+          {allMonths.length} mois · {moisLabel(allMonths[0])} → {moisLabel(allMonths[allMonths.length - 1])}
+        </p>
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <TabBtn id="graphiques"  label="📈 Graphiques" />
+        <TabBtn id="comparaison" label="🔍 Comparaison N/N-1/N-2" />
+        <TabBtn id="tableau"     label="📋 Tableau chronologique" />
+      </div>
+
+      {tab === "graphiques"  && renderGraphiques()}
+      {tab === "comparaison" && renderComparaison()}
+      {tab === "tableau"     && renderTableau()}
     </div>
   );
 }
