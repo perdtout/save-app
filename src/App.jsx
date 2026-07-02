@@ -919,12 +919,16 @@ function HistoryPage({ user, history }) {
     <td style={{ padding: "8px 9px", fontSize: 12, textAlign: align, fontWeight: bold ? 700 : 400, color: dim ? C.gray400 : undefined, verticalAlign: "middle" }}>{children}</td>
   );
 
+  const eurFmt = v => v != null ? `${Math.round(v).toLocaleString("fr-FR")} €` : "—";
+
   const KPI_COLS = [
-    { key: "margeTotale", label: "Marge €",    fmt: v => v != null ? `${Math.round(v).toLocaleString("fr-FR")} €` : "—" },
-    { key: "acc",         label: "Acc. %",      fmt: v => v != null ? `${v}%` : "—" },
-    { key: "gp",          label: "GP %",        fmt: v => v != null ? `${v}%` : "—" },
-    { key: "occ",         label: "Mob. Occ.",   fmt: v => v != null ? `${v}` : "—" },
-    { key: "mobileo",     label: "Mobileo",     fmt: v => v != null ? `${v}` : "—" },
+    { key: "margeTotale", label: "Marge €",     fmt: eurFmt },
+    { key: "acc",         label: "Acc. %",       fmt: v => v != null ? `${v}%` : "—" },
+    { key: "margeAcc",    label: "dont Acc. €",  fmt: eurFmt },
+    { key: "gp",          label: "GP %",         fmt: v => v != null ? `${v}%` : "—" },
+    { key: "margeGP",     label: "dont GP €",    fmt: eurFmt },
+    { key: "occ",         label: "Mob. Occ.",    fmt: v => v != null ? `${v}` : "—" },
+    { key: "mobileo",     label: "Mobileo",      fmt: v => v != null ? `${v}` : "—" },
   ];
 
   // Accès simplifié à une valeur depuis byStoreMois
@@ -933,7 +937,9 @@ function HistoryPage({ user, history }) {
     if (!row) return null;
     if (key === "margeTotale") return row.margeTotale ?? null;
     if (key === "acc")         return row.accessoires ?? null;
+    if (key === "margeAcc")    return row.margeAccessoires ?? null;
     if (key === "gp")          return row.gp ?? null;
+    if (key === "margeGP")     return row.margeGP ?? null;
     if (key === "occ")         return row.occasion ?? null;
     if (key === "mobileo")     return row.mobileo ?? null;
     return null;
