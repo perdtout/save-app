@@ -1528,11 +1528,11 @@ function analyzeSeries(points, { suffix = "", target = null, higherIsBetter = tr
   const seuil = Math.max(0.1, Math.abs(avg) * 0.02);
   if (Math.abs(delta) <= seuil) { sens = "stable"; couleur = C.gray600; }
   else { const positif = higherIsBetter ? delta > 0 : delta < 0; sens = delta > 0 ? "hausse" : "baisse"; couleur = positif ? C.ok : C.bad; }
-  const fmt = (v) => `${v}${suffix}`;
+  const fmt = (v) => `${Number(v).toLocaleString("fr-FR", { maximumFractionDigits: 1 })}${suffix}`;
   const nbMois = pts.length;
   let phrase = "";
   if (sens === "stable") phrase = `Stable autour de ${fmt(avg)} sur ${nbMois} mois.`;
-  else { const mot = sens === "hausse" ? "Progression" : "Repli"; phrase = `${mot} de ${delta > 0 ? "+" : ""}${fmt(delta)} sur ${nbMois} mois (de ${fmt(first)} à ${fmt(last)}).`; }
+  else { const mot = sens === "hausse" ? "Progression" : "Repli"; phrase = `${mot} de ${delta > 0 ? "+" : "−"}${fmt(Math.abs(delta))} sur ${nbMois} mois, de ${fmt(first)} à ${fmt(last)}.`; }
   phrase += regulier ? ` Évolution régulière.` : ` Évolution irrégulière (de ${fmt(minV)} à ${fmt(maxV)}).`;
   if (pts.length >= 4 && Math.abs(recentTrend) > seuil) {
     const recOk = higherIsBetter ? recentTrend > 0 : recentTrend < 0;
@@ -1547,431 +1547,385 @@ function analyzeSeries(points, { suffix = "", target = null, higherIsBetter = tr
   return { phrase, couleur, delta, suffix, avg, last };
 }
 
-function MiniLineChart({ data, label, suffix = "", target, color = C.accent, higherIsBetter = true, isVolume = false }) {
-  const points = data.filter(d => d.value != null);
-  if (points.length === 0) return null;
-  const lastIdx = points.length - 1;
-  const lastMois = points[lastIdx]?.mois;
-  const enCours = lastMois && estMoisEnCours(lastMois);
-  let projection = null;
-  if (enCours && isVolume) projection = projeterVolume(points[lastIdx].value, lastMois);
-  const analysisPoints = enCours ? points.slice(0, -1) : points;
-  const drawPoints = points.map((p, i) => ({ ...p, estEnCours: enCours && i === lastIdx }));
-  const values = drawPoints.map(p => p.value);
-  const projValue = projection ? projection.projete : null;
-  const allVals = projValue != null ? [...values, projValue] : values;
-  const rawMax = Math.max(...allVals, target != null ? target : -Infinity);
-  const rawMin = Math.min(...allVals, target != null ? target : Infinity);
+// ─── COURBE DE TENDANCE ───────────────────────────────────────────────────────
+// Trait fin, points seulement aux extrémités et sur le mois en cours, ligne
+// d'objectif discrète, projection de fin de mois en pointillé. Survol : repère
+// vertical + infobulle.
+function TrendChart({ points, target, suffix = "", isVolume = false, mois }) {
+  const [hover, setHover] = useState(null);
+  const pts = (points || []).filter(p => p.value != null);
+  if (pts.length < 2) {
+    return <div className="empty" style={{ padding: "26px 0" }}>Pas assez d'historique pour tracer une tendance.</div>;
+  }
+
+  const lastIdx = pts.length - 1;
+  const enCours = estMoisEnCours(pts[lastIdx].mois);
+  const projection = (enCours && isVolume) ? projeterVolume(pts[lastIdx].value, pts[lastIdx].mois) : null;
+  const projValue = projection?.projete ?? null;
+
+  const W = 360, H = 132, padL = 6, padR = projValue != null ? 40 : 30, padT = 20, padB = 22;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+
+  const vals = pts.map(p => p.value);
+  const all = [...vals, ...(projValue != null ? [projValue] : []), ...(target != null ? [target] : [])];
+  const rawMax = Math.max(...all), rawMin = Math.min(...all);
   const span = (rawMax - rawMin) || Math.abs(rawMax) || 1;
-  const maxV = rawMax + span * 0.15, minV = Math.max(0, rawMin - span * 0.15);
+  const maxV = rawMax + span * 0.18, minV = Math.max(0, rawMin - span * 0.18);
   const range = (maxV - minV) || 1;
-  const W = 340, H = 150, padX = 12, padTop = 22, padBot = 26;
-  const plotH = H - padTop - padBot, plotW = W - padX * 2;
-  const stepX = drawPoints.length > 1 ? plotW / (drawPoints.length - 1) : 0;
-  const xy = drawPoints.map((p, i) => ({ x: padX + i * stepX, y: padTop + plotH - ((p.value - minV) / range) * plotH, v: p.value, mois: p.mois, estEnCours: p.estEnCours }));
-  const smoothPath = (pts) => {
-    if (pts.length < 2) return "";
-    let d = `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
-    for (let i = 0; i < pts.length - 1; i++) {
-      const p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2;
-      const c1x = p1.x + (p2.x - p0.x) / 6, c1y = p1.y + (p2.y - p0.y) / 6;
-      const c2x = p2.x - (p3.x - p1.x) / 6, c2y = p2.y - (p3.y - p1.y) / 6;
-      d += ` C ${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${c2x.toFixed(1)} ${c2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
-    }
-    return d;
-  };
-  const linePath = smoothPath(xy);
-  const areaPath = xy.length > 0 ? `${linePath} L ${xy[xy.length - 1].x.toFixed(1)} ${(padTop + plotH).toFixed(1)} L ${padX} ${(padTop + plotH).toFixed(1)} Z` : "";
-  const targetY = target != null ? padTop + plotH - ((target - minV) / range) * plotH : null;
-  const analysis = analyzeSeries(analysisPoints, { suffix, target, higherIsBetter });
-  const monthLabels = ["Jan", "Fév", "Mar", "Avr", "Mai", "Jui", "Jul", "Aoû", "Sep", "Oct", "Nov", "Déc"];
-  const shortLabel = (mois) => { if (!mois) return ""; const [, m] = mois.split("-"); return monthLabels[parseInt(m) - 1] || ""; };
-  const projY = projValue != null ? padTop + plotH - ((projValue - minV) / range) * plotH : null;
+
+  const x = (i) => padL + (pts.length > 1 ? (i * plotW) / (pts.length - 1) : 0);
+  const y = (v) => padT + plotH - ((v - minV) / range) * plotH;
+  const xy = pts.map((p, i) => ({ ...p, x: x(i), y: y(p.value), i }));
+
+  const line = xy.map((p, i) => `${i ? "L" : "M"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
+  const area = `${line} L ${xy[lastIdx].x.toFixed(1)} ${(padT + plotH).toFixed(1)} L ${padL} ${(padT + plotH).toFixed(1)} Z`;
+  const targetY = target != null ? y(target) : null;
+
+  const MOIS_COURTS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
+  const moisCourt = (cle) => { const m = parseInt((cle || "").split("-")[1], 10); return MOIS_COURTS[m - 1] || ""; };
+  const moisLong = (cle) => { const [a, m] = (cle || "").split("-"); return `${moisCourt(cle)} ${a}`; };
+  const fmt = (v) => `${Number(v).toLocaleString("fr-FR", { maximumFractionDigits: 1 })}${suffix}`;
+
+  const idxLabels = new Set([0, lastIdx, Math.floor(lastIdx / 2)]);
+  const pointe = hover != null ? xy[hover] : null;
+
   return (
-    <div style={{ marginBottom: 4 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: C.gray600, marginBottom: 4 }}>{label}</div>
-      <div style={{ overflowX: "auto" }}>
-        <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: "block", minWidth: 200 }}>
-          <defs>
-            <linearGradient id={`area-${label}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={color} stopOpacity="0.18" />
-              <stop offset="100%" stopColor={color} stopOpacity="0.01" />
-            </linearGradient>
-          </defs>
-          {targetY != null && (
-            <line x1={padX} y1={targetY} x2={W - padX} y2={targetY} stroke={C.gray200} strokeWidth="1.5" strokeDasharray="4,3" />
-          )}
-          {areaPath && <path d={areaPath} fill={`url(#area-${label})`} />}
-          {linePath && <path d={linePath} fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />}
-          {projY != null && (
-            <line x1={xy[xy.length - 1].x} y1={xy[xy.length - 1].y} x2={xy[xy.length - 1].x + stepX * 0.7} y2={projY} stroke={color} strokeWidth="1.5" strokeDasharray="3,3" opacity="0.55" />
-          )}
-          {xy.map((pt, i) => (
-            <g key={i}>
-              <circle cx={pt.x} cy={pt.y} r={pt.estEnCours ? 5 : 3.5} fill={pt.estEnCours ? C.warn : color} stroke={C.white} strokeWidth="1.5" />
-              {(i === 0 || i === xy.length - 1 || pt.estEnCours) && (
-                <text x={pt.x} y={pt.y - 8} textAnchor="middle" fontSize="9" fill={pt.estEnCours ? C.warn : color} fontWeight="700">{pt.v}{suffix}</text>
-              )}
-              {(i === 0 || i === xy.length - 1 || i % Math.max(1, Math.floor(xy.length / 5)) === 0) && (
-                <text x={pt.x} y={H - 4} textAnchor="middle" fontSize="8" fill={C.gray400}>{shortLabel(pt.mois)}</text>
-              )}
-            </g>
-          ))}
-          {targetY != null && (
-            <text x={W - padX - 2} y={targetY - 3} textAnchor="end" fontSize="8" fill={C.gray400}>obj. {target}{suffix}</text>
-          )}
-          {projValue != null && projY != null && (
-            <text x={xy[xy.length - 1].x + stepX * 0.7 + 2} y={projY - 5} fontSize="8" fill={C.warn} fontWeight="700">~{projValue}{suffix}</text>
-          )}
-        </svg>
-      </div>
-      {analysis && (
-        <div style={{ fontSize: 11, color: analysis.couleur, lineHeight: 1.5, marginTop: 4, padding: "5px 8px", background: C.bg, borderRadius: 6 }}>
-          {analysis.phrase}
-          {enCours && projection && (
-            <span style={{ color: C.warn, fontWeight: 700 }}> | En cours : {points[lastIdx].value}{suffix} / {projection.ecoules}j · Projection fin de mois : ~{projection.projete}{suffix}.</span>
-          )}
+    <div style={{ position: "relative" }}>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block", overflow: "visible" }}
+        onMouseLeave={() => setHover(null)}>
+        <defs>
+          <linearGradient id="tg" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#E8612C" stopOpacity="0.16" />
+            <stop offset="100%" stopColor="#E8612C" stopOpacity="0.01" />
+          </linearGradient>
+        </defs>
+
+        {/* Repères horizontaux, discrets */}
+        {[0, 0.5, 1].map(f => (
+          <line key={f} x1={padL} x2={W - padR} y1={padT + plotH * f} y2={padT + plotH * f}
+            stroke="#F2EEEA" strokeWidth="1" />
+        ))}
+
+        {/* Objectif */}
+        {targetY != null && (
+          <>
+            <line x1={padL} x2={W - padR} y1={targetY} y2={targetY} stroke="#D6CFC8" strokeWidth="1" />
+            <text x={W - padR + 4} y={targetY + 3} fontSize="9" fill="#8A847E">obj. {fmt(target)}</text>
+          </>
+        )}
+
+        <path d={area} fill="url(#tg)" />
+        <path d={line} fill="none" stroke="#E8612C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+
+        {/* Projection de fin de mois */}
+        {projValue != null && (
+          <>
+            <line x1={xy[lastIdx].x} y1={xy[lastIdx].y} x2={xy[lastIdx].x + 26} y2={y(projValue)}
+              stroke="#B4881B" strokeWidth="1.5" strokeDasharray="3,3" />
+            <circle cx={xy[lastIdx].x + 26} cy={y(projValue)} r="3.5" fill="#B4881B" stroke="#fff" strokeWidth="2" />
+          </>
+        )}
+
+        {/* Points : extrémités et mois en cours seulement */}
+        {xy.map((p, i) => (
+          (i === 0 || i === lastIdx) && (
+            <circle key={i} cx={p.x} cy={p.y} r="4.5"
+              fill={i === lastIdx && enCours ? "#B4881B" : "#E8612C"} stroke="#fff" strokeWidth="2" />
+          )
+        ))}
+
+        {/* Étiquettes directes, parcimonieuses */}
+        {xy.map((p, i) => idxLabels.has(i) && i !== Math.floor(lastIdx / 2) && (
+          <text key={`l${i}`} x={p.x} y={p.y - 10} textAnchor={i === 0 ? "start" : "middle"}
+            fontSize="10" fontWeight="700" fill={i === lastIdx && enCours ? "#B4881B" : "#5A544E"}>{fmt(p.value)}</text>
+        ))}
+
+        {/* Axe des mois */}
+        {xy.map((p, i) => (idxLabels.has(i)) && (
+          <text key={`x${i}`} x={p.x} y={H - 6} textAnchor={i === 0 ? "start" : i === lastIdx ? "end" : "middle"}
+            fontSize="9" fill="#8A847E">{moisCourt(p.mois)}</text>
+        ))}
+
+        {/* Repère de survol */}
+        {pointe && (
+          <>
+            <line x1={pointe.x} x2={pointe.x} y1={padT - 6} y2={padT + plotH} stroke="#2B2B2B" strokeWidth="1" opacity="0.18" />
+            <circle cx={pointe.x} cy={pointe.y} r="5" fill="#E8612C" stroke="#fff" strokeWidth="2" />
+          </>
+        )}
+
+        {/* Zones de survol */}
+        {xy.map((p, i) => (
+          <rect key={`h${i}`} x={p.x - plotW / (pts.length * 2)} y={0}
+            width={plotW / pts.length} height={H} fill="transparent"
+            onMouseEnter={() => setHover(i)} />
+        ))}
+      </svg>
+
+      {pointe && (
+        <div style={{
+          position: "absolute", top: 0, left: `${(pointe.x / W) * 100}%`, transform: "translateX(-50%)",
+          background: "#2B2B2B", color: "#fff", borderRadius: 8, padding: "5px 9px", fontSize: 11.5,
+          whiteSpace: "nowrap", pointerEvents: "none", boxShadow: "0 4px 12px rgba(0,0,0,.22)", zIndex: 3,
+        }}>
+          <b>{fmt(pointe.value)}</b> <span style={{ opacity: .6 }}>{moisLong(pointe.mois)}</span>
+        </div>
+      )}
+
+      {projection && (
+        <div style={{
+          marginTop: 8, padding: "8px 11px", background: "var(--warn-wash)", borderRadius: 9,
+          fontSize: 12, color: "var(--warn)", fontWeight: 650, display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap",
+        }}>
+          <span>Mois en cours : {fmt(pts[lastIdx].value)} en {projection.ecoules} j ouvrés</span>
+          <span style={{ marginLeft: "auto", color: "var(--ink)" }}>Projection fin de mois <b>≈ {fmt(projection.projete)}</b></span>
         </div>
       )}
     </div>
   );
 }
 
+// ─── ÉCRAN HISTORIQUE ─────────────────────────────────────────────────────────
 function HistoryPage({ user, history }) {
   const isRZ = user.role === "rz";
   const stores = isRZ ? STORES_ORDER : [user.store];
+  const [vue, setVue] = useState("courbes");
+  const [kpi, setKpi] = useState("acc");
+  const [magasin, setMagasin] = useState("all");
+  const [moisSel, setMoisSel] = useState(null);
+  const [storeTab, setStoreTab] = useState(stores[0]);
 
-  // Vue courante : "graphiques" (existante) | "comparaison" | "tableau"
-  const [tab, setTab] = useState("graphiques");
-  const [activeStore, setActiveStore] = useState(isRZ ? "all" : user.store);
-  const [selectedMonth, setSelectedMonth] = useState(null);
-  const [tableStore, setTableStore] = useState(stores[0]);
-
-  const OCCASION_OBJ = { "Pontarlier": 50, "Lons-le-Saunier": 50, "Dijon": 25, "Besançon": 20, "Chalon-sur-Saône": 15 };
-  const MOIS_FR = { "01":"Janv.","02":"Févr.","03":"Mars","04":"Avr.","05":"Mai","06":"Juin","07":"Juil.","08":"Août","09":"Sept.","10":"Oct.","11":"Nov.","12":"Déc." };
+  const MOIS_FR = { "01": "Janv.", "02": "Févr.", "03": "Mars", "04": "Avr.", "05": "Mai", "06": "Juin",
+                    "07": "Juil.", "08": "Août", "09": "Sept.", "10": "Oct.", "11": "Nov.", "12": "Déc." };
   const moisLabel = (k) => { if (!k) return "—"; const [y, m] = k.split("-"); return `${MOIS_FR[m] || m} ${y}`; };
 
-  // byStore est un objet { [magasin]: [{ mois, accessoires, gp, occasion, mobileo, margeTotale, atm }] }
-  // On le convertit en byStore[magasin][mois] = row pour accès rapide
   const byStoreMois = {};
-  if (history?.byStore) {
-    for (const [store, rows] of Object.entries(history.byStore)) {
-      byStoreMois[store] = {};
-      for (const row of (Array.isArray(rows) ? rows : [])) {
-        if (row.mois) byStoreMois[store][row.mois] = row;
-      }
-    }
+  for (const [store, rows] of Object.entries(history?.byStore || {})) {
+    byStoreMois[store] = {};
+    for (const row of (Array.isArray(rows) ? rows : [])) if (row.mois) byStoreMois[store][row.mois] = row;
   }
-
   const allMonths = (history?.months || []).slice().sort();
-  // Initialise le mois sélectionné au plus récent dès que les données arrivent
-  const effectiveMonth = selectedMonth || allMonths[allMonths.length - 1] || null;
 
-  if (!history || !allMonths.length) {
+  if (!allMonths.length) {
     return (
-      <Card>
-        <div style={{ textAlign: "center", padding: "28px 0", color: C.gray400 }}>
-          <div style={{ fontSize: 28, marginBottom: 8 }}>📅</div>
-          <div style={{ fontSize: 13 }}>Pas encore d'historique mensuel disponible.</div>
-        </div>
-      </Card>
+      <div className="stack">
+        <h1 className="h-screen">Historique mensuel</h1>
+        <Card><div className="empty">Pas encore d'historique mensuel disponible dans Notion.</div></Card>
+      </div>
     );
   }
 
-  // ─── Série pour MiniLineChart (champs backend : accessoires/gp/occasion/mobileo/margeTotale/atm)
-  const buildSeries = (storeKey, kpi) => allMonths.map(m => {
-    const row = byStoreMois[storeKey]?.[m];
-    let value = null;
-    if (kpi === "acc"    && row?.accessoires != null)  value = row.accessoires;
-    if (kpi === "gp"     && row?.gp != null)           value = row.gp;
-    if (kpi === "occ"    && row?.occasion != null)     value = row.occasion;
-    if (kpi === "mobileo"&& row?.mobileo != null)      value = row.mobileo;
-    if (kpi === "atm"    && row?.atm != null)          value = row.atm;
-    return { mois: m, value };
-  });
-
-  // ─── Évolution en % entre deux valeurs
-  const evo = (vN, vNm1) => {
-    if (vN == null || vNm1 == null || vNm1 === 0) return null;
-    return ((vN - vNm1) / Math.abs(vNm1) * 100).toFixed(1);
-  };
-
-  const EvoChip = ({ pct }) => {
-    if (pct == null) return <span style={{ color: C.gray200, fontSize: 11 }}>—</span>;
-    const v = parseFloat(pct);
-    const color = v > 0 ? C.ok : v < 0 ? C.bad : C.gray400;
-    const arrow = v > 0 ? "▲" : v < 0 ? "▼" : "=";
-    return <span style={{ fontSize: 11, fontWeight: 700, color }}>{arrow} {Math.abs(v)}%</span>;
-  };
-
-  const kpiColor = (key, val) => {
-    if (val == null) return C.gray200;
-    if (key === "acc") return val >= 25 ? C.ok : val >= 22 ? C.warn : C.bad;
-    if (key === "gp")  return val >= 20 ? C.ok : val >= 17 ? C.warn : C.bad;
-    return C.text;
-  };
-
-  const TabBtn = ({ id, label }) => (
-    <button onClick={() => setTab(id)} style={{
-      padding: "6px 14px", borderRadius: 8, border: "none",
-      background: tab === id ? C.accent : C.gray50,
-      color: tab === id ? C.white : C.gray600,
-      fontWeight: tab === id ? 700 : 500, fontSize: 12,
-      cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
-    }}>{label}</button>
-  );
-
-  const TH = ({ children, align = "left" }) => (
-    <th style={{ textAlign: align, padding: "7px 9px", fontSize: 10, fontWeight: 700, color: C.gray400, textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: `2px solid ${C.gray50}`, whiteSpace: "nowrap" }}>{children}</th>
-  );
-  const TD = ({ children, align = "left", bold, dim }) => (
-    <td style={{ padding: "8px 9px", fontSize: 12, textAlign: align, fontWeight: bold ? 700 : 400, color: dim ? C.gray400 : undefined, verticalAlign: "middle" }}>{children}</td>
-  );
-
-  const eurFmt = v => v != null ? `${Math.round(v).toLocaleString("fr-FR")} €` : "—";
-
-  const KPI_COLS = [
-    { key: "margeTotale", label: "Marge €",     fmt: eurFmt },
-    { key: "acc",         label: "Acc. %",       fmt: v => v != null ? `${v}%` : "—" },
-    { key: "margeAcc",    label: "dont Acc. €",  fmt: eurFmt },
-    { key: "gp",          label: "GP %",         fmt: v => v != null ? `${v}%` : "—" },
-    { key: "margeGP",     label: "dont GP €",    fmt: eurFmt },
-    { key: "occ",         label: "Mob. Occ.",    fmt: v => v != null ? `${v}` : "—" },
-    { key: "mobileo",     label: "Mobileo",      fmt: v => v != null ? `${v}` : "—" },
+  const KPIS = [
+    { id: "acc",     label: "Ratio accessoires", champ: "accessoires", suffix: " %", target: ACC_OBJ },
+    { id: "gp",      label: "Ratio GP",          champ: "gp",          suffix: " %", target: GP_OBJ },
+    { id: "occ",     label: "Mobiles d'occasion", champ: "occasion",   suffix: "",   volume: true },
+    { id: "mobileo", label: "Forfaits Mobileo",  champ: "mobileo",     suffix: "",   volume: true, target: MOBILEO_OBJ },
+    { id: "atm",     label: "Ratio ATM",         champ: "atm",         suffix: " %", target: ATM_OBJ },
   ];
+  const k = KPIS.find(x => x.id === kpi);
+  const cible = (store) => kpi === "occ" ? (OCC_OBJ[store] ?? null) : (k.target ?? null);
 
-  // Accès simplifié à une valeur depuis byStoreMois
-  const getVal = (store, mois, key) => {
-    const row = byStoreMois[store]?.[mois];
-    if (!row) return null;
-    if (key === "margeTotale") return row.margeTotale ?? null;
-    if (key === "acc")         return row.accessoires ?? null;
-    if (key === "margeAcc")    return row.margeAccessoires ?? null;
-    if (key === "gp")          return row.gp ?? null;
-    if (key === "margeGP")     return row.margeGP ?? null;
-    if (key === "occ")         return row.occasion ?? null;
-    if (key === "mobileo")     return row.mobileo ?? null;
-    return null;
+  const serie = (store) => allMonths.map(m => ({ mois: m, value: byStoreMois[store]?.[m]?.[k.champ] ?? null }));
+  const derniere = (store) => {
+    const s = serie(store).filter(p => p.value != null);
+    return s.length ? s[s.length - 1].value : null;
   };
 
-  // ─── VUE GRAPHIQUES (existante) ───────────────────────────────────────────
-  const displayStores = activeStore === "all" ? stores : [activeStore];
+  const magasinsAffiches = magasin === "all" ? stores : [magasin];
 
-  const renderGraphiques = () => (
-    <>
-      {isRZ && (
-        <select value={activeStore} onChange={e => setActiveStore(e.target.value)}
-          style={{ alignSelf: "flex-end", border: `1.5px solid ${C.gray200}`, borderRadius: 8, padding: "6px 12px", fontSize: 13, fontFamily: "inherit", color: C.navy, background: C.white, cursor: "pointer" }}>
-          <option value="all">🏢 Tous les magasins</option>
-          {STORES_ORDER.map(s => <option key={s} value={s}>{s}</option>)}
-        </select>
-      )}
-      {displayStores.map(store => (
-        <Card key={store}>
-          <div style={{ fontWeight: 800, fontSize: 14, color: C.navy, marginBottom: 14 }}>{store}</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
-            <MiniLineChart data={buildSeries(store, "acc")} label="Ratio Accessoires (%)" suffix="%" target={25} color={C.accent} />
-            <MiniLineChart data={buildSeries(store, "gp")} label="Ratio GP (%)" suffix="%" target={20} color={C.accentB} />
-            <MiniLineChart data={buildSeries(store, "occ")} label="Mobiles Occasion (vol.)" target={OCCASION_OBJ[store]} color={C.ok} isVolume />
-            <MiniLineChart data={buildSeries(store, "mobileo")} label="Forfaits Mobileo" target={10} color="#8B5CF6" isVolume />
-            <MiniLineChart data={buildSeries(store, "atm")} label="Ratio ATM (%)" suffix="%" target={10} color={C.warn} />
-          </div>
-        </Card>
-      ))}
-    </>
-  );
+  const evo = (a, b) => (a == null || b == null || b === 0) ? null : +(((a - b) / Math.abs(b)) * 100).toFixed(1);
+  const EvoChip = ({ pct }) => pct == null
+    ? <span className="txt-muted">—</span>
+    : <span className={`trend ${pct > 0 ? "t-up" : pct < 0 ? "t-down" : "t-flat"}`}>
+        {pct > 0 ? "▲" : pct < 0 ? "▼" : "▬"} {Math.abs(pct).toLocaleString("fr-FR")} %
+      </span>;
 
-  // ─── VUE COMPARAISON N / N-1 / N-2 ──────────────────────────────────────
-  const renderComparaison = () => {
-    if (!effectiveMonth) return null;
-    const [y, mm] = effectiveMonth.split("-");
-    const keyN   = effectiveMonth;
-    const keyNm1 = `${parseInt(y) - 1}-${mm}`;
-    const keyNm2 = `${parseInt(y) - 2}-${mm}`;
+  const COLS = [
+    { key: "margeTotale",      label: "Marge",        fmt: eur },
+    { key: "accessoires",      label: "Acc.",         fmt: v => pct(v),  obj: ACC_OBJ },
+    { key: "margeAccessoires", label: "dont acc.",    fmt: eur },
+    { key: "gp",               label: "GP",           fmt: v => pct(v),  obj: GP_OBJ },
+    { key: "margeGP",          label: "dont GP",      fmt: eur },
+    { key: "occasion",         label: "Occasion",     fmt: v => v ?? "—" },
+    { key: "mobileo",          label: "Mobileo",      fmt: v => v ?? "—" },
+  ];
+  const val = (store, m, key) => byStoreMois[store]?.[m]?.[key] ?? null;
 
-    return (
-      <>
-        {/* Sélecteur de mois */}
-        <Card style={{ padding: "12px 16px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: C.navy }}>📅 Mois :</span>
-            <select value={effectiveMonth} onChange={e => setSelectedMonth(e.target.value)}
-              style={{ border: `1.5px solid ${C.gray200}`, borderRadius: 8, padding: "5px 10px", fontSize: 13, fontFamily: "inherit", color: C.navy, background: C.white, cursor: "pointer" }}>
-              {allMonths.slice().reverse().map(m => <option key={m} value={m}>{moisLabel(m)}</option>)}
-            </select>
-            <div style={{ fontSize: 12, color: C.gray400 }}>
-              <strong style={{ color: C.navy }}>{moisLabel(keyN)}</strong>
-              {" vs "}<strong>{moisLabel(keyNm1)}</strong>
-              {" vs "}<strong>{moisLabel(keyNm2)}</strong>
-            </div>
-          </div>
-        </Card>
-
-        {stores.map(store => {
-          const hasN = KPI_COLS.some(c => getVal(store, keyN, c.key) != null);
-          return (
-            <Card key={store}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-                <div style={{ fontWeight: 800, fontSize: 14, color: C.navy }}>{store}</div>
-                {!hasN && <span style={{ fontSize: 11, color: C.warn, background: C.warn + "22", padding: "2px 8px", borderRadius: 10, fontWeight: 600 }}>Données manquantes pour {moisLabel(keyN)}</span>}
-              </div>
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 540 }}>
-                  <thead>
-                    <tr>
-                      <TH>Indicateur</TH>
-                      <TH align="right">{moisLabel(keyN)}</TH>
-                      <TH align="center">vs N-1</TH>
-                      <TH align="right">{moisLabel(keyNm1)}</TH>
-                      <TH align="center">vs N-2</TH>
-                      <TH align="right">{moisLabel(keyNm2)}</TH>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {KPI_COLS.map((col, i) => {
-                      const vN   = getVal(store, keyN,   col.key);
-                      const vNm1 = getVal(store, keyNm1, col.key);
-                      const vNm2 = getVal(store, keyNm2, col.key);
-                      const isMobPre = col.key === "mobileo" && keyNm2 < "2024-03";
-                      return (
-                        <tr key={col.key} style={{ background: i % 2 === 0 ? C.white : C.bg }}>
-                          <TD bold>{col.label}</TD>
-                          <TD align="right">
-                            <span style={{ fontWeight: 700, color: kpiColor(col.key, vN) }}>{col.fmt(vN)}</span>
-                          </TD>
-                          <TD align="center"><EvoChip pct={evo(vN, vNm1)} /></TD>
-                          <TD align="right" dim>{col.fmt(vNm1)}</TD>
-                          <TD align="center">
-                            {isMobPre ? <span style={{ fontSize: 11, color: C.gray200 }}>N/A</span> : <EvoChip pct={evo(vN, vNm2)} />}
-                          </TD>
-                          <TD align="right" dim>
-                            {isMobPre ? <span style={{ fontSize: 11, color: C.gray200 }}>N/A</span> : col.fmt(vNm2)}
-                          </TD>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </Card>
-          );
-        })}
-      </>
-    );
-  };
-
-  // ─── VUE TABLEAU CHRONOLOGIQUE ───────────────────────────────────────────
-  const renderTableau = () => {
-    const storeMonths = byStoreMois[tableStore] ? Object.keys(byStoreMois[tableStore]).sort() : [];
-    return (
-      <>
-        {/* Sélecteur magasin */}
-        <Card style={{ padding: "12px 16px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: C.navy }}>🏪 Magasin :</span>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {stores.map(s => (
-                <button key={s} onClick={() => setTableStore(s)} style={{
-                  padding: "4px 11px", borderRadius: 7, border: "none",
-                  background: tableStore === s ? C.navy : C.gray50,
-                  color: tableStore === s ? C.white : C.gray600,
-                  fontWeight: tableStore === s ? 700 : 500, fontSize: 12,
-                  cursor: "pointer", fontFamily: "inherit",
-                }}>{s}</button>
-              ))}
-            </div>
-          </div>
-        </Card>
-
-        <Card>
-          <SectionHead>{tableStore} — Évolution mensuelle complète</SectionHead>
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
-              <thead>
-                <tr>
-                  <TH>Mois</TH>
-                  <TH align="right">Marge €</TH>
-                  <TH align="center">Évol.</TH>
-                  <TH align="right">Acc. %</TH>
-                  <TH align="right">GP %</TH>
-                  <TH align="right">Mob. Occ.</TH>
-                  <TH align="right">Mobileo</TH>
-                </tr>
-              </thead>
-              <tbody>
-                {storeMonths.map((m, i) => {
-                  const row = byStoreMois[tableStore]?.[m] || {};
-                  const prevKey = i > 0 ? storeMonths[i - 1] : null;
-                  const prevRow = prevKey ? byStoreMois[tableStore]?.[prevKey] : null;
-                  const evoMarge = prevRow ? evo(row.margeTotale, prevRow.margeTotale) : null;
-                  const isNewYear = i > 0 && m.endsWith("-01");
-                  const isMobPre = m < "2024-03";
-                  return (
-                    <tr key={m} style={{
-                      background: i % 2 === 0 ? C.white : C.bg,
-                      borderTop: isNewYear ? `2px solid ${C.gray200}` : undefined,
-                    }}>
-                      <td style={{ padding: "8px 9px", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" }}>
-                        {isNewYear && <span style={{ fontSize: 10, color: C.accent, fontWeight: 800, marginRight: 5 }}>{m.split("-")[0]}</span>}
-                        {moisLabel(m)}
-                      </td>
-                      <TD align="right">
-                        <span style={{ fontWeight: 700, color: C.navy }}>
-                          {row.margeTotale != null ? `${Math.round(row.margeTotale).toLocaleString("fr-FR")} €` : "—"}
-                        </span>
-                      </TD>
-                      <TD align="center"><EvoChip pct={evoMarge} /></TD>
-                      <TD align="right">
-                        <span style={{ fontWeight: 700, color: kpiColor("acc", row.accessoires) }}>
-                          {row.accessoires != null ? `${row.accessoires}%` : "—"}
-                        </span>
-                      </TD>
-                      <TD align="right">
-                        <span style={{ fontWeight: 700, color: kpiColor("gp", row.gp) }}>
-                          {row.gp != null ? `${row.gp}%` : "—"}
-                        </span>
-                      </TD>
-                      <TD align="right">{row.occasion != null ? row.occasion : "—"}</TD>
-                      <TD align="right">
-                        {isMobPre ? <span style={{ fontSize: 11, color: C.gray200 }}>N/A</span> : (row.mobileo != null ? row.mobileo : "—")}
-                      </TD>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <div style={{ marginTop: 10, display: "flex", gap: 14, flexWrap: "wrap", fontSize: 11, color: C.gray400 }}>
-            <span><span style={{ color: C.ok, fontWeight: 700 }}>●</span> Acc. ≥25% / GP ≥20%</span>
-            <span><span style={{ color: C.warn, fontWeight: 700 }}>●</span> Acc. ≥22% / GP ≥17%</span>
-            <span><span style={{ color: C.bad, fontWeight: 700 }}>●</span> Sous objectif</span>
-            <span style={{ color: C.gray200 }}>N/A = Mobileo démarré Mars 2024</span>
-          </div>
-        </Card>
-      </>
-    );
-  };
+  const moisEffectif = moisSel || allMonths[allMonths.length - 1];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* Header */}
-      <div>
-        <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: C.navy }}>Historique mensuel</h2>
-        <p style={{ margin: "2px 0 0", fontSize: 12, color: C.gray400 }}>
-          {allMonths.length} mois · {moisLabel(allMonths[0])} → {moisLabel(allMonths[allMonths.length - 1])}
-        </p>
+    <div className="stack">
+      <div className="ctx">
+        <h1 className="h-screen">Historique</h1>
+        <p>{allMonths.length} mois · {moisLabel(allMonths[0])} → {moisLabel(allMonths[allMonths.length - 1])}</p>
       </div>
 
-      {/* Tabs */}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <TabBtn id="graphiques"  label="📈 Graphiques" />
-        <TabBtn id="comparaison" label="🔍 Comparaison N/N-1/N-2" />
-        <TabBtn id="tableau"     label="📋 Tableau chronologique" />
+      <div className="seg">
+        <button className={vue === "courbes" ? "on" : ""} onClick={() => setVue("courbes")}>Tendances</button>
+        <button className={vue === "comparaison" ? "on" : ""} onClick={() => setVue("comparaison")}>Comparaison N / N-1</button>
+        <button className={vue === "tableau" ? "on" : ""} onClick={() => setVue("tableau")}>Tableau complet</button>
       </div>
 
-      {tab === "graphiques"  && renderGraphiques()}
-      {tab === "comparaison" && renderComparaison()}
-      {tab === "tableau"     && renderTableau()}
+      {vue === "courbes" && (
+        <>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+            <select className="select" value={kpi} onChange={e => setKpi(e.target.value)}>
+              {KPIS.map(x => <option key={x.id} value={x.id}>{x.label}</option>)}
+            </select>
+            {isRZ && (
+              <select className="select" value={magasin} onChange={e => setMagasin(e.target.value)}>
+                <option value="all">Les 5 magasins</option>
+                {STORES_ORDER.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            )}
+            <span className="meta">
+              {k.target || kpi === "occ" ? "Ligne grise = objectif" : "Aucun objectif fixé sur cet indicateur"}
+              {k.volume ? " · pointillé = projection de fin de mois" : ""}
+            </span>
+          </div>
+
+          <div className="grid" style={{ gridTemplateColumns: magasinsAffiches.length === 1
+            ? "1fr" : "repeat(auto-fit,minmax(330px,1fr))" }}>
+            {magasinsAffiches.map(store => {
+              const pts = serie(store);
+              const t = cible(store);
+              const derniereVal = derniere(store);
+              const statut = t != null ? statusFor(derniereVal, t) : "neutral";
+              const an = analyzeSeries(pts.filter(p => !estMoisEnCours(p.mois)),
+                { suffix: k.suffix, target: t, higherIsBetter: true });
+              return (
+                <Card key={store}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 4 }}>
+                    <div>
+                      <h3 className="h-section" style={{ margin: 0 }}>{store}</h3>
+                      <span className="meta">{k.label}</span>
+                    </div>
+                    <Chip status={statut}>
+                      {derniereVal != null
+                        ? `${Number(derniereVal).toLocaleString("fr-FR", { maximumFractionDigits: 1 })}${k.suffix}`
+                        : "—"}
+                    </Chip>
+                  </div>
+                  {an && (
+                    <p style={{ margin: "6px 0 10px", fontSize: 12.5, lineHeight: 1.55, color: an.couleur }}>{an.phrase}</p>
+                  )}
+                  <TrendChart points={pts} target={t} suffix={k.suffix} isVolume={!!k.volume} />
+                </Card>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {vue === "comparaison" && (() => {
+        const [y, mm] = moisEffectif.split("-");
+        const n = moisEffectif, n1 = `${+y - 1}-${mm}`, n2 = `${+y - 2}-${mm}`;
+        return (
+          <>
+            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+              <select className="select" value={moisEffectif} onChange={e => setMoisSel(e.target.value)}>
+                {allMonths.slice().reverse().map(m => <option key={m} value={m}>{moisLabel(m)}</option>)}
+              </select>
+              <span className="meta">{moisLabel(n)} comparé à {moisLabel(n1)} et {moisLabel(n2)}</span>
+            </div>
+            {!allMonths.includes(n1) && (
+              <Card accent={C.accent}>
+                <div className="note" style={{ margin: 0 }}>
+                  Aucune donnée pour <b>{moisLabel(n1)}</b> : l'historique Notion démarre en {moisLabel(allMonths[0])}.
+                  La comparaison année sur année deviendra possible à partir de {moisLabel(`${+allMonths[0].split("-")[0] + 1}-${allMonths[0].split("-")[1]}`)}.
+                </div>
+              </Card>
+            )}
+            {stores.map(store => (
+              <Card key={store}>
+                <SectionHead>{store}</SectionHead>
+                <div className="tbl-wrap">
+                  <table className="tbl">
+                    <thead><tr>
+                      <th>Indicateur</th>
+                      <th className="r">{moisLabel(n)}</th><th className="c">vs N-1</th>
+                      <th className="r">{moisLabel(n1)}</th><th className="c">vs N-2</th>
+                      <th className="r">{moisLabel(n2)}</th>
+                    </tr></thead>
+                    <tbody>
+                      {COLS.map(c => {
+                        const vN = val(store, n, c.key), vN1 = val(store, n1, c.key), vN2 = val(store, n2, c.key);
+                        return (
+                          <tr key={c.key}>
+                            <td className="name">{c.label}</td>
+                            <td className="r"><span className={c.obj ? `txt-${statusFor(vN, c.obj)}` : ""}
+                              style={{ fontWeight: 700 }}>{c.fmt(vN)}</span></td>
+                            <td className="c"><EvoChip pct={evo(vN, vN1)} /></td>
+                            <td className="r txt-muted">{c.fmt(vN1)}</td>
+                            <td className="c"><EvoChip pct={evo(vN, vN2)} /></td>
+                            <td className="r txt-muted">{c.fmt(vN2)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="mcards">
+                  {COLS.map(c => {
+                    const vN = val(store, n, c.key), vN1 = val(store, n1, c.key);
+                    return (
+                      <div className="mrow" key={c.key}>
+                        <span>{c.label}</span>
+                        <b>{c.fmt(vN)} <span style={{ fontWeight: 400 }}><EvoChip pct={evo(vN, vN1)} /></span></b>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
+            ))}
+          </>
+        );
+      })()}
+
+      {vue === "tableau" && (
+        <>
+          {isRZ && (
+            <div className="seg">
+              {stores.map(s => (
+                <button key={s} className={storeTab === s ? "on" : ""} onClick={() => setStoreTab(s)}>{s}</button>
+              ))}
+            </div>
+          )}
+          <Card>
+            <SectionHead>{isRZ ? storeTab : user.store} — mois par mois</SectionHead>
+            <div className="tbl-wrap">
+              <table className="tbl">
+                <thead><tr>
+                  <th>Mois</th><th className="r">Marge</th><th className="c">Évol.</th>
+                  <th className="r">Acc.</th><th className="r">GP</th>
+                  <th className="r">Occasion</th><th className="r">Mobileo</th>
+                </tr></thead>
+                <tbody>
+                  {Object.keys(byStoreMois[isRZ ? storeTab : user.store] || {}).sort().reverse().map((m, i, arr) => {
+                    const st = isRZ ? storeTab : user.store;
+                    const r = byStoreMois[st]?.[m] || {};
+                    const prev = arr[i + 1] ? byStoreMois[st]?.[arr[i + 1]] : null;
+                    return (
+                      <tr key={m}>
+                        <td className="name">{moisLabel(m)}</td>
+                        <td className="r" style={{ fontWeight: 700 }}>{eur(r.margeTotale)}</td>
+                        <td className="c"><EvoChip pct={prev ? evo(r.margeTotale, prev.margeTotale) : null} /></td>
+                        <td className={`r txt-${statusFor(r.accessoires, ACC_OBJ)}`} style={{ fontWeight: 700 }}>{pct(r.accessoires)}</td>
+                        <td className={`r txt-${statusFor(r.gp, GP_OBJ)}`} style={{ fontWeight: 700 }}>{pct(r.gp)}</td>
+                        <td className="r">{r.occasion ?? "—"}</td>
+                        <td className="r">{r.mobileo ?? "—"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <p className="note">
+              Vert : objectif atteint (accessoires ≥ {ACC_OBJ} %, GP ≥ {GP_OBJ} %) · ambre : sous l'objectif de moins de 15 % · brique : en dessous.
+            </p>
+          </Card>
+        </>
+      )}
     </div>
   );
 }
