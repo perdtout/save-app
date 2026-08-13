@@ -859,7 +859,7 @@ function ResultsPage({ user, data, vendors, vendorsError, mois, onRefresh, refre
 }
 
 // ─── ÉCRAN MAGASIN ───────────────────────────────────────────────────────────
-function StorePage({ user, store, data, vendors, actions, mois, onBack }) {
+function StorePage({ user, store, data, vendors, actions, mois, onBack, onSelectStore }) {
   const isRZ = user.role === "rz";
   const d = data?.page1, d2 = data?.page2;
   const acc = d?.accessoires?.[store], gp = d?.gp?.[store], occ = d?.occasion?.[store];
@@ -897,11 +897,18 @@ function StorePage({ user, store, data, vendors, actions, mois, onBack }) {
   return (
     <div className="stack">
       <div>
-        <button className="btn btn-ghost btn-sm" onClick={onBack} style={{ marginBottom: 12 }}>← Retour</button>
+        <button className="btn btn-ghost btn-sm" onClick={onBack} style={{ marginBottom: 12 }}>← Vue d'ensemble</button>
         <div className="ctx">
           <h1 className="h-screen">{store}</h1>
           <p>{(STORE_STAFF[store] || []).join(" · ")} · {mois.ecoules} jours ouvrés écoulés sur {mois.total}</p>
         </div>
+        {isRZ && onSelectStore && (
+          <div className="seg" style={{ marginBottom: 4 }}>
+            {STORES_ORDER.map(s => (
+              <button key={s} className={s === store ? "on" : ""} onClick={() => onSelectStore(s)}>{s}</button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-3">
@@ -2063,19 +2070,27 @@ export default function App() {
   };
 
   const openStore = (store) => { setSelectedStore(store); setPage("store"); setMenuOpen(false); };
-  const goTo = (id) => { setPage(id); setMenuOpen(false); };
+  const goTo = (id) => {
+    // L'écran magasin doit être accessible directement depuis le menu :
+    // sans sélection préalable, on ouvre le premier magasin de la zone.
+    if (id === "store" && !selectedStore) {
+      setSelectedStore(user.role === "rz" ? STORES_ORDER[0] : user.store);
+    }
+    setPage(id); setMenuOpen(false);
+  };
 
   if (!user) return <LoginScreen serverState={serverState} onRetryPing={checkServer} onLogin={(u) => { setUser(u); setPage("dashboard"); }} />;
 
   const nav = [
     { id: "dashboard", label: "Vue d'ensemble" },
+    { id: "store",     label: "Magasins" },
     { id: "results",   label: "Résultats" },
     { id: "history",   label: "Historique" },
     { id: "goat",      label: "GOAT" },
     { id: "guide",     label: "Guide Mobileo" },
     { id: "visits",    label: "Visites" },
   ];
-  const navActive = page === "store" ? "results" : page;
+  const navActive = page;
 
   return (
     <>
@@ -2141,7 +2156,7 @@ export default function App() {
                 )}
                 {page === "store" && results && selectedStore && (
                   <StorePage user={user} store={selectedStore} data={results} vendors={vendors} actions={actions}
-                    mois={mois} onBack={() => setPage("dashboard")} />
+                    mois={mois} onBack={() => setPage("dashboard")} onSelectStore={setSelectedStore} />
                 )}
                 {page === "history" && <HistoryPage user={user} history={history} />}
                 {page === "goat"    && <GoatPage user={user} goatData={goatData} goatError={goatError} lastLoaded={lastLoaded} onRefresh={() => loadAll(true)} refreshing={refreshing} />}
