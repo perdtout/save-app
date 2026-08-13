@@ -1,0 +1,238 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   SAVE Pilotage — feuille de style
+   Charte Repair Mobile conservée. Les couleurs de statut ont été révisées
+   pour ne plus être confondues avec l'orange de marque : séparation validée
+   par calcul, y compris en vision daltonienne.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+:root{
+  /* Marque */
+  --brand:#E8612C; --brand-light:#FF8A50; --brand-wash:#FDEEE7;
+  --ink:#2B2B2B; --ink-2:#363636; --ink-3:#4A4A4A;
+  --cream:#F7F5F3; --surface:#FFFFFF;
+  --line:#EAE5E0; --line-2:#F2EEEA;
+  --muted:#8A847E; --sub:#5A544E;
+
+  /* Statuts */
+  --ok:#2E7D53;      --ok-wash:#EAF3EE;
+  --warn:#B4881B;    --warn-wash:#F8F1DF;
+  --bad:#A02724;     --bad-wash:#F7EAE9;
+  --neutral:#8A847E; --neutral-wash:#F0EDEA;
+
+  --r:14px; --r-sm:10px;
+  --shadow:0 1px 2px rgba(43,43,43,.04), 0 6px 20px rgba(43,43,43,.06);
+  --shadow-lift:0 2px 4px rgba(43,43,43,.05), 0 12px 28px rgba(43,43,43,.10);
+}
+
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--cream); color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased;
+}
+a{text-decoration:none}
+button{font-family:inherit}
+:focus-visible{outline:2px solid var(--brand); outline-offset:2px; border-radius:6px}
+
+/* ─── Typographie ───────────────────────────────────────────────────────── */
+.h-screen{font-size:22px;font-weight:700;margin:0;letter-spacing:-.01em}
+.h-section{font-size:15px;font-weight:700;margin:0 0 14px}
+.lbl{font-size:11.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.meta{font-size:12.5px;color:var(--muted)}
+.ctx{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:22px}
+.ctx p{margin:0;font-size:12.5px;color:var(--muted)}
+.stack{display:flex;flex-direction:column;gap:18px}
+.sec{margin-bottom:30px}
+
+/* ─── Barre de navigation ───────────────────────────────────────────────── */
+.nav{background:var(--ink);padding:0 20px;height:58px;display:flex;align-items:center;gap:10px;
+  position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,.22)}
+.nav-logo{width:34px;height:34px;border-radius:9px;object-fit:cover;flex-shrink:0}
+.nav-brand{color:#fff;font-size:13.5px;font-weight:700;line-height:1.15}
+.nav-brand i{color:var(--brand-light);font-style:normal}
+.nav-sub{color:rgba(255,255,255,.45);font-size:9.5px;letter-spacing:.11em;text-transform:uppercase}
+.nav-links{display:flex;gap:2px;margin-left:20px}
+.nav-links button{color:rgba(255,255,255,.6);font-size:12.5px;font-weight:500;padding:7px 13px;
+  border-radius:8px;border:none;background:transparent;cursor:pointer;white-space:nowrap}
+.nav-links button:hover{color:#fff;background:rgba(255,255,255,.06)}
+.nav-links button.on{background:rgba(255,255,255,.11);color:#fff;font-weight:600}
+.nav-right{margin-left:auto;display:flex;align-items:center;gap:14px;flex-shrink:0}
+.nav-stamp{display:flex;align-items:center;gap:7px;font-size:11.5px;color:rgba(255,255,255,.55);white-space:nowrap}
+.nav-stamp i{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.nav-user{text-align:right}
+.nav-user b{display:block;color:#fff;font-size:11.5px;font-weight:600}
+.nav-user span{color:var(--brand-light);font-size:9px;text-transform:uppercase;letter-spacing:.06em}
+.nav-icon{padding:5px 10px;border-radius:7px;border:1px solid rgba(255,255,255,.16);background:transparent;
+  color:rgba(255,255,255,.65);font-size:13px;cursor:pointer}
+.nav-burger{display:none;align-items:center;justify-content:center;width:38px;height:34px;border-radius:8px;
+  border:1px solid rgba(255,255,255,.16);background:transparent;color:#fff;font-size:17px;cursor:pointer;padding:0}
+.nav-mobile{display:none;flex-direction:column;background:var(--ink-2);position:sticky;top:58px;z-index:99;
+  padding:8px;box-shadow:0 6px 16px rgba(0,0,0,.25)}
+.nav-mobile.open{display:flex}
+.nav-mobile button{text-align:left;padding:12px 14px;border-radius:9px;border:none;background:transparent;
+  color:rgba(255,255,255,.75);font-size:14.5px;font-weight:500;cursor:pointer;margin-bottom:2px}
+.nav-mobile button.on{background:var(--brand);color:#fff;font-weight:600}
+
+main{max-width:1200px;margin:0 auto;padding:28px 20px 64px}
+
+/* ─── Cartes ────────────────────────────────────────────────────────────── */
+.card{background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);padding:20px 22px}
+.card.pad-0{padding:0}
+.card.accent-brand{border-left:3px solid var(--brand)}
+.card.accent-bad{border-left:3px solid var(--bad)}
+.grid{display:grid;gap:14px}
+.grid-3{grid-template-columns:repeat(3,1fr)}
+.grid-auto{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.grid-stores{grid-template-columns:repeat(auto-fit,minmax(216px,1fr))}
+
+/* ─── Tuiles KPI ────────────────────────────────────────────────────────── */
+.tile{background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);padding:16px 18px 18px}
+.tile .lbl{font-size:11px}
+.tile .val{font-size:29px;font-weight:750;letter-spacing:-.025em;margin:8px 0 2px;line-height:1}
+.tile .val small{font-size:15px;font-weight:600;color:var(--muted);letter-spacing:0}
+.tile .foot{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;min-height:18px;flex-wrap:wrap}
+.tile .foot b{color:var(--ink);font-weight:650}
+.tile.hero .val{font-size:40px}
+
+/* ─── Jauge ─────────────────────────────────────────────────────────────── */
+.meter{position:relative;height:6px;border-radius:3px;background:var(--line-2);margin:11px 0 9px}
+.meter i{position:absolute;left:0;top:0;height:100%;border-radius:3px;display:block;transition:width .5s ease}
+.meter u{position:absolute;top:-3px;width:2px;height:12px;background:var(--ink);opacity:.22;border-radius:1px}
+.meter.flat{margin:0}
+.fill-ok{background:var(--ok)} .fill-warn{background:var(--warn)}
+.fill-bad{background:var(--bad)} .fill-neutral{background:var(--neutral)}
+
+/* ─── Pastilles ─────────────────────────────────────────────────────────── */
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:650;
+  padding:3px 9px;border-radius:20px;white-space:nowrap}
+.chip::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0}
+.chip.no-dot::before{display:none}
+.c-ok{background:var(--ok-wash);color:var(--ok)}
+.c-warn{background:var(--warn-wash);color:var(--warn)}
+.c-bad{background:var(--bad-wash);color:var(--bad)}
+.c-neutral{background:var(--neutral-wash);color:var(--sub)}
+.c-brand{background:var(--brand-wash);color:var(--brand)}
+.trend{font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:3px}
+.t-up{color:var(--ok)} .t-down{color:var(--bad)} .t-flat{color:var(--muted)}
+.txt-ok{color:var(--ok)} .txt-warn{color:var(--warn)} .txt-bad{color:var(--bad)} .txt-muted{color:var(--muted)}
+
+/* ─── Boutons ───────────────────────────────────────────────────────────── */
+.btn{cursor:pointer;border:none;border-radius:9px;font-weight:600;display:inline-flex;align-items:center;
+  gap:6px;padding:8px 15px;font-size:13px;transition:filter .15s}
+.btn:hover{filter:brightness(.95)}
+.btn-primary{background:var(--brand);color:#fff}
+.btn-secondary{background:var(--line-2);color:var(--ink)}
+.btn-ink{background:var(--ink);color:#fff}
+.btn-ghost{background:transparent;color:var(--sub);border:1px solid var(--line)}
+.btn-sm{padding:6px 12px;font-size:12px}
+.btn-lg{padding:11px 22px;font-size:14px}
+.btn[disabled]{opacity:.55;cursor:default}
+
+/* ─── Sous-onglets ──────────────────────────────────────────────────────── */
+.seg{display:inline-flex;background:var(--line-2);border-radius:11px;padding:3px;gap:3px;flex-wrap:wrap}
+.seg button{border:none;background:transparent;font-size:13px;font-weight:600;color:var(--sub);
+  padding:7px 16px;border-radius:8px;cursor:pointer}
+.seg button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(43,43,43,.10)}
+
+/* ─── Champs ────────────────────────────────────────────────────────────── */
+.select,.input{border:1.5px solid var(--line);border-radius:9px;padding:8px 12px;font-size:13px;
+  font-family:inherit;color:var(--ink);background:var(--surface);cursor:pointer}
+.input{cursor:text;width:100%}
+.field-label{font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;
+  letter-spacing:.06em;display:block;margin-bottom:5px}
+
+/* ─── Tableaux ──────────────────────────────────────────────────────────── */
+.tbl-wrap{overflow-x:auto}
+table.tbl{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+table.tbl th{text-align:left;font-size:11px;font-weight:650;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--muted);padding:0 12px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+table.tbl td{padding:13px 12px;border-bottom:1px solid var(--line-2);font-size:14px}
+table.tbl tr:last-child td{border-bottom:none}
+table.tbl .r{text-align:right} table.tbl .c{text-align:center}
+table.tbl td.name{font-weight:650}
+table.tbl td .cell-sub{font-size:11.5px;color:var(--muted);font-weight:400;margin-top:1px}
+table.tbl tr.dim td{background:var(--neutral-wash);color:var(--muted)}
+table.tbl tr.clickable{cursor:pointer}
+table.tbl tr.clickable:hover td{background:var(--brand-wash)}
+.big{font-size:16px;font-weight:750;letter-spacing:-.01em}
+.note{font-size:12.5px;color:var(--muted);margin:12px 0 0;line-height:1.6}
+
+/* ─── Cartes magasin ────────────────────────────────────────────────────── */
+.store{background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);padding:18px 20px;
+  cursor:pointer;transition:box-shadow .18s, transform .18s;border-top:3px solid transparent;
+  text-align:left;border-left:none;border-right:none;border-bottom:none;width:100%;font:inherit;color:inherit}
+.store:hover{transform:translateY(-2px);box-shadow:var(--shadow-lift)}
+.store.s-ok{border-top-color:var(--ok)} .store.s-warn{border-top-color:var(--warn)} .store.s-bad{border-top-color:var(--bad)}
+.store h3{margin:0;font-size:15.5px;font-weight:700}
+.store .team{font-size:11.5px;color:var(--muted);margin:2px 0 12px}
+.store .marge{font-size:22px;font-weight:750;letter-spacing:-.02em}
+.store .marge-lbl{font-size:11px;color:var(--muted);margin-bottom:14px}
+.kpiline{display:flex;align-items:center;gap:9px;margin-bottom:8px}
+.kpiline>span:first-child{font-size:11.5px;color:var(--muted);width:38px;flex-shrink:0}
+.kpiline .bar{flex:1;height:5px;border-radius:3px;background:var(--line-2);position:relative}
+.kpiline .bar i{position:absolute;left:0;top:0;height:100%;border-radius:3px}
+.kpiline .bar u{position:absolute;top:-2.5px;width:1.5px;height:10px;background:var(--ink);opacity:.2}
+.kpiline b{font-size:12.5px;font-weight:700;width:46px;text-align:right;font-variant-numeric:tabular-nums}
+.store .score{font-size:11.5px;font-weight:650;margin-top:12px;padding-top:11px;border-top:1px solid var(--line-2);
+  display:flex;justify-content:space-between;align-items:center;gap:8px}
+
+/* ─── Priorités ────────────────────────────────────────────────────────── */
+.prio-item{display:flex;gap:16px;align-items:flex-start;padding:15px 22px;border-top:1px solid var(--line-2)}
+.prio-item:first-of-type{border-top:none}
+.prio-rank{width:24px;height:24px;border-radius:7px;background:var(--brand-wash);color:var(--brand);
+  font-weight:800;font-size:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.prio-txt{flex:1;min-width:0}
+.prio-txt b{font-weight:650;font-size:14.5px}
+.prio-txt p{margin:3px 0 0;font-size:13px;color:var(--sub);line-height:1.6}
+.prio-num{text-align:right;flex-shrink:0}
+.prio-num .v{font-size:20px;font-weight:750;letter-spacing:-.02em}
+.prio-num .o{font-size:11.5px;color:var(--muted)}
+
+/* ─── Commentaire RZ ───────────────────────────────────────────────────── */
+.quote{background:var(--brand-wash);border-radius:var(--r);padding:18px 22px;border-left:3px solid var(--brand)}
+.quote p{margin:8px 0 0;font-size:14.5px;line-height:1.65;white-space:pre-wrap}
+
+/* ─── Plan d'action ────────────────────────────────────────────────────── */
+.action{display:flex;gap:14px;align-items:flex-start;padding:14px 0;border-top:1px solid var(--line-2)}
+.action:first-of-type{border-top:none}
+.action .check{width:19px;height:19px;border-radius:6px;border:1.5px solid var(--line);flex-shrink:0;margin-top:2px}
+.action .check.done{background:var(--ok);border-color:var(--ok)}
+.action .check.doing{border-color:var(--warn);background:var(--warn-wash)}
+.action .body{flex:1;min-width:0}
+.action .body b{font-weight:600;font-size:14px}
+.action.is-done .body b{color:var(--muted);text-decoration:line-through}
+.action .body p{margin:3px 0 0;font-size:12px;color:var(--muted)}
+.action .side{display:flex;gap:8px;align-items:center;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
+
+/* ─── États ────────────────────────────────────────────────────────────── */
+.empty{text-align:center;padding:30px 10px;color:var(--muted);font-size:13px}
+.spin{width:30px;height:30px;border:3px solid var(--line-2);border-top-color:var(--brand);border-radius:50%;
+  animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+/* ─── Cartes mobiles (remplacent les tableaux) ─────────────────────────── */
+.mcards{display:none}
+.mcard{background:var(--surface);border-radius:12px;box-shadow:var(--shadow);padding:15px 16px;margin-bottom:11px}
+.mcard .top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:12px}
+.mcard h4{margin:0;font-size:14.5px;font-weight:700}
+.mrow{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:7px 0;
+  border-top:1px solid var(--line-2);font-size:13px}
+.mrow:first-of-type{border-top:none}
+.mrow span{color:var(--muted);font-size:12.5px}
+.mrow b{font-weight:700;font-variant-numeric:tabular-nums}
+
+@media(max-width:900px){ .grid-3{grid-template-columns:repeat(2,1fr)} }
+@media(max-width:768px){
+  .nav-links,.nav-user,.nav-stamp{display:none}
+  .nav-burger{display:inline-flex}
+  main{padding:18px 13px 56px}
+  .grid-3{grid-template-columns:1fr}
+  .card{padding:17px 16px}
+  .prio-item{padding:14px 16px;flex-wrap:wrap}
+  .tbl-wrap{display:none}
+  .mcards{display:block}
+  .h-screen{font-size:20px}
+}
+@media(prefers-reduced-motion:reduce){ *{animation:none!important;transition:none!important} }

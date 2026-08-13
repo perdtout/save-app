@@ -6,6 +6,65 @@ import logoRepairMobile from "./RepairMobile.png";
 // ═══════════════════════════════════════════════════════════════════════════
 const API_URL = "https://save-backend-cn9b.onrender.com";
 
+// ─── RÉVEIL DU SERVEUR ────────────────────────────────────────────────────────
+// L'API tourne sur une offre gratuite qui met le service en veille après une
+// période d'inactivité. La première requête de la journée peut donc prendre 30 à
+// 60 secondes. On sonde /api/health au démarrage pour prévenir l'utilisateur au
+// lieu de le laisser devant un écran vide en croyant que l'app est plantée.
+const WAKE_HINT_MS = 2500;    // au-delà de ce délai, on annonce le réveil
+const WAKE_TIMEOUT_MS = 90000;
+
+async function pingHealth() {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), WAKE_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${API_URL}/api/health`, { signal: ctrl.signal });
+    if (!res.ok) throw new Error(`statut ${res.status}`);
+    return true;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// ─── SESSION PERSISTANTE ──────────────────────────────────────────────────────
+// Le jeton était perdu à chaque rafraîchissement de page, ce qui renvoyait
+// l'utilisateur à l'écran de connexion. On le conserve jusqu'à son expiration
+// réelle (12 h côté backend).
+const AUTH_KEY = "save-pilotage-auth";
+
+function jwtExpiry(token) {
+  try {
+    const part = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    return JSON.parse(atob(part))?.exp || null;
+  } catch {
+    return null;
+  }
+}
+
+function readStoredAuth() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(AUTH_KEY) || "null");
+    if (!parsed?.token || !parsed?.user) return null;
+    if (!parsed.exp || parsed.exp * 1000 <= Date.now()) {
+      localStorage.removeItem(AUTH_KEY);
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+// Horodatage lisible : "aujourd'hui à 14 h 32" / "12/08 à 19 h 04"
+function stampLabel(date) {
+  if (!date) return "—";
+  const d = new Date(date);
+  const heure = `${String(d.getHours()).padStart(2, "0")} h ${String(d.getMinutes()).padStart(2, "0")}`;
+  const auj = new Date();
+  const memeJour = d.toDateString() === auj.toDateString();
+  return memeJour ? `aujourd'hui à ${heure}` : `${d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" })} à ${heure}`;
+}
+
 // ─── DESIGN TOKENS — Charte Repair Mobile ────────────────────────────────────
 const C = {
   navy: "#2B2B2B", navyMid: "#363636", navyL: "#4A4A4A",
@@ -17,6 +76,23 @@ const C = {
 
 const STORES_ORDER = ["Pontarlier", "Lons-le-Saunier", "Dijon", "Besançon", "Chalon-sur-Saône"];
 const NOTION_PAGE1_URL = "https://www.notion.so/379b706fb59681b68663eb4920323d27";
+// Équipes par magasin — sert aux en-têtes et à l'écran magasin
+const STORE_TEAM = {
+  "Pontarlier": "Mathis · Narcisse",
+  "Lons-le-Saunier": "Jérôme · Nassim",
+  "Dijon": "Jules · Bilhal",
+  "Chalon-sur-Saône": "Jean-Baptiste · seul en magasin",
+  "Besançon": "Samy · seul en magasin",
+};
+
+const STORE_STAFF = {
+  "Pontarlier": ["Mathis (responsable)", "Narcisse (technicien)"],
+  "Lons-le-Saunier": ["Jérôme (responsable)", "Nassim (technicien)"],
+  "Dijon": ["Jules (responsable)", "Bilhal (technicien)"],
+  "Chalon-sur-Saône": ["Jean-Baptiste (seul en magasin)"],
+  "Besançon": ["Samy (seul en magasin)"],
+};
+
 const NOTION_PAGE2_URL = "https://www.notion.so/379b706fb596813ebfe1d33c85a87531";
 
 // ─── GOAT — constantes & données de secours ──────────────────────────────────
@@ -35,50 +111,9 @@ const GOAT_VENDORS = {
   "Samy":          { store: "Besançon",         role: "solo" },
 };
 
-const GOAT_DATA_FALLBACK = {
-  weekly: {
-    label: "Semaine du 09 au 13 juin 2026",
-    scores: [
-      { name: "Mathis",        store: "Pontarlier",       total: 80.0, isSolo: false, breakdown: { accessoires: 25, gp: 25, mobileo: 10, atm: 20 } },
-      { name: "Jérôme",        store: "Lons-le-Saunier",  total: 80.0, isSolo: false, breakdown: { accessoires: 25, gp: 25, mobileo: 10, atm: 20 } },
-      { name: "Jean-Baptiste", store: "Chalon-sur-Saône", total: 55.0, isSolo: true,  breakdown: { accessoires: 22.8, gp: 23.9, mobileo: 0,  atm: 0  } },
-      { name: "Jules",         store: "Dijon",            total: 50.6, isSolo: false, breakdown: { accessoires: 21.9, gp: 19.2, mobileo: 5,  atm: 4.5 } },
-      { name: "Nassim",        store: "Lons-le-Saunier",  total: 50.1, isSolo: false, breakdown: { accessoires: 20.1, gp: 21,   mobileo: 5,  atm: 4   } },
-      { name: "Narcisse",      store: "Pontarlier",       total: 46.2, isSolo: false, breakdown: { accessoires: 22.4, gp: 19,   mobileo: 0,  atm: 4.8 } },
-      { name: "Samy",          store: "Besançon",         total: 43.9, isSolo: true,  breakdown: { accessoires: 14.9, gp: 25,   mobileo: 0,  atm: 0   } },
-      { name: "Bilhal",        store: "Dijon",            total: 35.8, isSolo: false, breakdown: { accessoires: 18,   gp: 14.2, mobileo: 0,  atm: 3.6 } },
-    ],
-  },
-  monthly: {
-    label: "Mai 2026",
-    scores: [
-      { name: "Mathis",        store: "Pontarlier",       total: 63.0, isSolo: false, breakdown: { accessoires: 25,   gp: 25,   mobileo: 10, atm: 3   } },
-      { name: "Samy",          store: "Besançon",         total: 60.5, isSolo: true,  breakdown: { accessoires: 27.3, gp: 25,   mobileo: 8.3,atm: 0   } },
-      { name: "Jean-Baptiste", store: "Chalon-sur-Saône", total: 57.8, isSolo: true,  breakdown: { accessoires: 25,   gp: 20.5, mobileo: 5,  atm: 0   } },
-      { name: "Jérôme",        store: "Lons-le-Saunier",  total: 56.0, isSolo: false, breakdown: { accessoires: 25,   gp: 25,   mobileo: 0,  atm: 6   } },
-      { name: "Narcisse",      store: "Pontarlier",       total: 55.0, isSolo: false, breakdown: { accessoires: 25,   gp: 25,   mobileo: 5,  atm: 0   } },
-      { name: "Nassim",        store: "Lons-le-Saunier",  total: 48.0, isSolo: false, breakdown: { accessoires: 23,   gp: 25,   mobileo: 0,  atm: 0   } },
-      { name: "Jules",         store: "Dijon",            total: 46.4, isSolo: false, breakdown: { accessoires: 25,   gp: 13.1, mobileo: 0,  atm: 5   } },
-      { name: "Bilhal",        store: "Dijon",            total: 45.4, isSolo: false, breakdown: { accessoires: 22.2, gp: 18.6, mobileo: 0,  atm: 0   } },
-    ],
-  },
-  titlesHistory: [
-    { type: "month", label: "Mai 2026",       winner: "Jérôme",   score: 86.0  },
-    { type: "month", label: "Avril 2026",     winner: "Jérôme",   score: 100.0 },
-    { type: "month", label: "Mars 2026",      winner: "Jérôme",   score: 95.0  },
-    { type: "month", label: "Février 2026",   winner: "Nassim",   score: 89.1  },
-    { type: "month", label: "Janvier 2026",   winner: "Jérôme",   score: 95.0  },
-    { type: "month", label: "Décembre 2025",  winner: "Jérôme",   score: 84.0  },
-    { type: "month", label: "Novembre 2025",  winner: "Jérôme",   score: 82.1  },
-    { type: "month", label: "Octobre 2025",   winner: "Jérôme",   score: 80.0  },
-    { type: "month", label: "Septembre 2025", winner: "Jérôme",   score: 100.0 },
-    { type: "month", label: "Août 2025",      winner: "Nassim",   score: 65.8  },
-    { type: "month", label: "Juillet 2025",   winner: "Jérôme",   score: 86.3  },
-    { type: "month", label: "Juin 2025",      winner: "Jérôme",   score: 80.8  },
-    { type: "week",  label: "09–13 juin 2026 (co-MVP)", winner: "Mathis",  score: 80.0 },
-    { type: "week",  label: "09–13 juin 2026 (co-MVP)", winner: "Jérôme",  score: 80.0 },
-  ],
-};
+// Aucune donnée de secours n'est stockée ici volontairement : afficher des
+// chiffres figés quand l'API ne répond pas revient à faire croire qu'ils sont à
+// jour. En cas d'échec de lecture, l'écran GOAT affiche un état d'erreur daté.
 
 function computeGoatSeasonPoints(titlesHistory) {
   const pts = {};
@@ -106,7 +141,10 @@ function computeCurrentStreak(titlesHistory) {
 // ─── UTILS ────────────────────────────────────────────────────────────────────
 const statusC = (s) => s === "ok" ? C.ok : s === "warn" ? C.warn : s === "bad" ? C.bad : C.gray400;
 const trendLabel = (t) => t > 0 ? `📈 +${t}` : t < 0 ? `📉 ${t}` : "➡️ =";
-const eur = (v) => v == null ? "—" : `${v.toLocaleString("fr-FR")} €`;
+const eur = (v) => v == null ? "—" : `${Math.round(v).toLocaleString("fr-FR")} €`;
+// Pourcentages en français : virgule décimale, jamais de point
+const pct = (v, dec = 1) => v == null ? "—" : `${Number(v).toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: dec })} %`;
+const nb = (v) => v == null ? "—" : Number(v).toLocaleString("fr-FR");
 
 // ─── API CLIENT ───────────────────────────────────────────────────────────────
 const api = {
@@ -120,12 +158,33 @@ const api = {
     if (!res.ok) throw new Error("Identifiants incorrects");
     const data = await res.json();
     this.token = data.token;
+    try {
+      localStorage.setItem(AUTH_KEY, JSON.stringify({
+        token: data.token, user: data.user, exp: jwtExpiry(data.token),
+      }));
+    } catch { /* navigation privée : on continue sans persistance */ }
     return data.user;
+  },
+  restore() {
+    const stored = readStoredAuth();
+    if (!stored) return null;
+    this.token = stored.token;
+    return stored.user;
+  },
+  logout() {
+    this.token = null;
+    try { localStorage.removeItem(AUTH_KEY); } catch { /* ignore */ }
   },
   async get(path) {
     const res = await fetch(`${API_URL}${path}`, {
       headers: { Authorization: `Bearer ${this.token}` },
     });
+    if (res.status === 401) {
+      this.logout();
+      const e = new Error("Session expirée, reconnecte-toi.");
+      e.code = "auth";
+      throw e;
+    }
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || `Erreur ${res.status}`);
@@ -135,46 +194,52 @@ const api = {
 };
 
 // ─── UI PRIMITIVES ─────────────────────────────────────────────────────────────
-function Card({ children, style = {}, accent }) {
-  return (
-    <div style={{
-      background: C.white, borderRadius: 12, padding: "18px 20px",
-      boxShadow: "0 1px 4px rgba(13,31,60,0.07)", border: `1px solid ${C.gray50}`,
-      borderLeft: accent ? `4px solid ${accent}` : undefined, ...style,
-    }}>{children}</div>
-  );
+function Card({ children, style = {}, accent, className = "" }) {
+  const cls = ["card", accent === C.bad ? "accent-bad" : accent ? "accent-brand" : "", className].filter(Boolean).join(" ");
+  return <div className={cls} style={style}>{children}</div>;
 }
 
-function Gauge({ value, max = 100, target, color }) {
-  const pct = Math.min(100, ((value || 0) / max) * 100);
-  const tpct = Math.min(98, (target / max) * 100);
+// Jauge : remplissage = statut, repère = objectif
+function Gauge({ value, max = 100, target, color, flat }) {
+  const pct = Math.max(0, Math.min(100, ((value || 0) / (max || 1)) * 100));
+  const tpct = target != null ? Math.min(98, (target / (max || 1)) * 100) : null;
+  const cls = color === C.ok ? "fill-ok" : color === C.warn ? "fill-warn" : color === C.bad ? "fill-bad" : "fill-neutral";
   return (
-    <div style={{ position: "relative", height: 8, background: C.gray50, borderRadius: 4, minWidth: 80 }}>
-      <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${pct}%`, background: color, borderRadius: 4, transition: "width 0.5s" }} />
-      <div style={{ position: "absolute", left: `${tpct}%`, top: -3, width: 2, height: 14, background: C.navy, opacity: 0.25, borderRadius: 1 }} />
+    <div className={`meter${flat ? " flat" : ""}`}>
+      <i className={cls} style={{ width: `${pct}%` }} />
+      {tpct != null && <u style={{ left: `${tpct}%` }} />}
     </div>
   );
 }
 
 function SectionHead({ children }) {
-  return <h3 style={{ margin: "0 0 14px", fontSize: 12, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: C.gray400 }}>{children}</h3>;
+  return <h3 className="h-section">{children}</h3>;
 }
 
-function Btn({ children, onClick, variant = "primary", size = "md", style = {} }) {
-  const s = { sm: { padding: "5px 12px", fontSize: 12 }, md: { padding: "9px 16px", fontSize: 13 }, lg: { padding: "11px 22px", fontSize: 14 } };
-  const v = {
-    primary: { background: C.accent, color: C.white },
-    secondary: { background: C.gray50, color: C.navy },
-    navy: { background: C.navy, color: C.white },
-  };
-  return <button onClick={onClick} style={{ cursor: "pointer", border: "none", borderRadius: 8, fontFamily: "inherit", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 5, ...s[size], ...v[variant], ...style }}>{children}</button>;
+function Btn({ children, onClick, variant = "primary", size = "md", style = {}, disabled }) {
+  const cls = ["btn", `btn-${variant}`, size === "sm" ? "btn-sm" : size === "lg" ? "btn-lg" : ""].filter(Boolean).join(" ");
+  return <button className={cls} onClick={onClick} disabled={disabled} style={style}>{children}</button>;
+}
+
+// Pastille de statut : couleur + texte, jamais la couleur seule
+function Chip({ status = "neutral", children }) {
+  return <span className={`chip c-${status}`}>{children}</span>;
+}
+
+function Trend({ value, suffix = "", unit = "pts" }) {
+  if (value == null || value === 0) return <span className="trend t-flat">▬ stable</span>;
+  const up = value > 0;
+  return (
+    <span className={`trend ${up ? "t-up" : "t-down"}`}>
+      {up ? "▲" : "▼"} {Math.abs(value).toLocaleString("fr-FR", { maximumFractionDigits: 1 })}{suffix} {unit}
+    </span>
+  );
 }
 
 function Spinner({ label = "Chargement…" }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, padding: 40 }}>
-      <div style={{ width: 32, height: 32, border: `3px solid ${C.gray50}`, borderTop: `3px solid ${C.accent}`, borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 13, padding: 44 }}>
+      <div className="spin" />
       <span style={{ fontSize: 13, color: C.gray400 }}>{label}</span>
     </div>
   );
@@ -183,11 +248,11 @@ function Spinner({ label = "Chargement…" }) {
 function ErrorBanner({ message, onRetry }) {
   return (
     <Card accent={C.bad}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <span style={{ fontSize: 22 }}>⚠️</span>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 13 }}>
+        <span style={{ fontSize: 20, lineHeight: 1.2 }}>⚠️</span>
         <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 700, color: C.navy, fontSize: 14 }}>Connexion au serveur impossible</div>
-          <div style={{ fontSize: 12, color: C.gray600, marginTop: 2 }}>{message}. Vérifie que le backend tourne sur {API_URL}.</div>
+          <div style={{ fontWeight: 700, fontSize: 14.5 }}>Connexion au serveur impossible</div>
+          <div className="note" style={{ marginTop: 3 }}>{message}. Aucune donnée n'est affichée tant que la lecture n'a pas abouti.</div>
         </div>
         {onRetry && <Btn size="sm" variant="secondary" onClick={onRetry}>Réessayer</Btn>}
       </div>
@@ -195,8 +260,41 @@ function ErrorBanner({ message, onRetry }) {
   );
 }
 
+// ─── BANDEAU DE RÉVEIL DU SERVEUR ─────────────────────────────────────────────
+function WakeBanner({ state, onRetry, dark }) {
+  if (state === "ok" || state === "idle") return null;
+  const cfg = {
+    checking: { color: C.gray400, txt: "Connexion au serveur…" },
+    waking:   { color: C.warn,    txt: "Réveil du serveur en cours — cela peut prendre jusqu'à une minute la première fois de la journée. Reste sur cette page." },
+    down:     { color: C.bad,     txt: "Le serveur ne répond pas." },
+  }[state];
+  if (!cfg) return null;
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 10,
+      background: dark ? "rgba(255,255,255,0.07)" : cfg.color + "14",
+      border: `1px solid ${cfg.color}${dark ? "55" : "33"}`,
+      color: dark ? C.white : C.text,
+      borderRadius: 10, padding: "10px 14px", fontSize: 12.5, lineHeight: 1.55,
+    }}>
+      <span style={{
+        width: 9, height: 9, borderRadius: "50%", background: cfg.color, flexShrink: 0,
+        animation: state === "down" ? "none" : "pulse 1.4s ease-in-out infinite",
+      }} />
+      <style>{`@keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:.35 } }`}</style>
+      <span style={{ flex: 1 }}>{cfg.txt}</span>
+      {state === "down" && onRetry && (
+        <button onClick={onRetry} style={{
+          border: `1px solid ${cfg.color}66`, background: "transparent", color: cfg.color,
+          borderRadius: 7, padding: "4px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+        }}>Réessayer</button>
+      )}
+    </div>
+  );
+}
+
 // ─── LOGIN ─────────────────────────────────────────────────────────────────────
-function LoginScreen({ onLogin }) {
+function LoginScreen({ onLogin, serverState, onRetryPing }) {
   const [u, setU] = useState(""); const [p, setP] = useState("");
   const [err, setErr] = useState(""); const [busy, setBusy] = useState(false);
 
@@ -239,179 +337,264 @@ function LoginScreen({ onLogin }) {
             {busy ? "Connexion…" : "Se connecter"}
           </Btn>
         </div>
-        <div style={{ marginTop: 16, padding: 10, background: C.bg, borderRadius: 8, fontSize: 11, color: C.gray400, lineHeight: 1.6 }}>
-          <strong style={{ color: C.gray600 }}>RZ :</strong> thomas.desternes / rz2024<br />
-          <strong style={{ color: C.gray600 }}>Magasins :</strong> dijon · lons · pontarlier · chalon · besancon
-        </div>
+        {serverState && serverState !== "ok" && (
+          <div style={{ marginTop: 14 }}>
+            <WakeBanner state={serverState} onRetry={onRetryPing} />
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
 // ─── DASHBOARD ─────────────────────────────────────────────────────────────────
-function Dashboard({ user, data }) {
-  const stores = user.role === "rz" ? STORES_ORDER : [user.store];
-  const d = data?.page1, d2 = data?.page2;
+// ─── Helpers de calcul partagés ───────────────────────────────────────────────
+const OCC_OBJ = { "Pontarlier": 50, "Lons-le-Saunier": 50, "Dijon": 25, "Besançon": 20, "Chalon-sur-Saône": 15 };
+const MOBILEO_OBJ = 10;   // bas de la fourchette 10-15
+const ATM_OBJ = 10;       // % des mobiles d'occasion
+const ACC_OBJ = 25;
+const GP_OBJ = 20;
 
-  const tz = {
-    margeTotal: Object.values(d?.accessoires || {}).reduce((s, v) => s + (v.margeTotal || 0), 0),
-    margeAcc:   Object.values(d?.accessoires || {}).reduce((s, v) => s + (v.margeAcc   || 0), 0),
-    margeGP:    Object.values(d?.gp          || {}).reduce((s, v) => s + (v.margeGP    || 0), 0),
-    occasion:   Object.values(d?.occasion    || {}).reduce((s, v) => s + (v.volume     || 0), 0),
-    mobileo:    Object.values(d2?.mobileo    || {}).reduce((s, v) => s + (v.total      || 0), 0),
-    atm:        Object.values(d2?.atm        || {}).reduce((s, v) => s + (v.total      || 0), 0),
-  };
+// Jours ouvrés du mois en cours : mardi→samedi, hors fériés français
+function moisEnCours() {
+  const now = new Date();
+  const annee = now.getFullYear(), mois = now.getMonth() + 1;
+  const ecoules = joursOuvres(annee, mois, now.getDate());
+  const total = joursOuvres(annee, mois);
+  return { annee, mois, ecoules, total, ratio: total ? ecoules / total : 0 };
+}
 
-  const computeSynthese = () => {
-    const forts = [], faibles = [];
-    for (const store of stores) {
-      const acc = d?.accessoires?.[store], gp = d?.gp?.[store], occ = d?.occasion?.[store];
-      const mob = d2?.mobileo?.[store], atm = d2?.atm?.[store];
-      if (acc?.ratio != null) {
-        if (acc.ratio >= 25) forts.push(`${store} — Accessoires ${acc.ratio}%`);
-        else if (acc.ratio < 20) faibles.push(`${store} — Accessoires ${acc.ratio}% (obj. 25%)`);
-      }
-      if (gp?.ratio != null) {
-        if (gp.ratio >= 20) forts.push(`${store} — GP ${gp.ratio}%`);
-        else if (gp.ratio < 18) faibles.push(`${store} — GP ${gp.ratio}% (obj. 20%)`);
-      }
-      if (occ?.volume != null && occ?.objectif) {
-        const pct = Math.round((occ.volume / occ.objectif) * 100);
-        if (pct >= 100) forts.push(`${store} — Occasion ${occ.volume}/${occ.objectif}`);
-        else if (pct < 40) faibles.push(`${store} — Occasion ${occ.volume}/${occ.objectif}`);
-      }
-      if (mob?.total != null) {
-        if (mob.total >= 10) forts.push(`${store} — Mobileo ${mob.total} contrats`);
-        else if (mob.total === 0) faibles.push(`${store} — Mobileo : aucun contrat`);
-      }
-      if (atm?.ratio != null && atm?.mobOcc > 0) {
-        if (atm.ratio >= 10) forts.push(`${store} — ATM ${atm.ratio}%`);
-        else if (atm.ratio === 0) faibles.push(`${store} — ATM 0% (obj. 10%)`);
+function projeter(valeur, { ecoules, total }) {
+  if (valeur == null || !ecoules) return null;
+  return Math.round((valeur / ecoules) * total);
+}
+
+const statusFor = (valeur, objectif) =>
+  valeur == null ? "neutral" : valeur >= objectif ? "ok" : valeur >= objectif * 0.85 ? "warn" : "bad";
+
+function totauxZone(d, d2, stores) {
+  const t = { margeTotal: 0, margeAcc: 0, margeGP: 0, occasion: 0, occObjectif: 0, mobileo: 0, atm: 0 };
+  for (const s of stores) {
+    t.margeTotal += d?.accessoires?.[s]?.margeTotal || 0;
+    t.margeAcc   += d?.accessoires?.[s]?.margeAcc   || 0;
+    t.margeGP    += d?.gp?.[s]?.margeGP             || 0;
+    t.occasion   += d?.occasion?.[s]?.volume        || 0;
+    t.occObjectif += d?.occasion?.[s]?.objectif ?? OCC_OBJ[s] ?? 0;
+    t.mobileo    += d2?.mobileo?.[s]?.total         || 0;
+    t.atm        += d2?.atm?.[s]?.total             || 0;
+  }
+  t.ratioAcc = t.margeTotal ? +(t.margeAcc / t.margeTotal * 100).toFixed(1) : null;
+  t.ratioGP  = t.margeTotal ? +(t.margeGP  / t.margeTotal * 100).toFixed(1) : null;
+  t.ratioATM = t.occasion ? +(t.atm / t.occasion * 100).toFixed(1) : null;
+  return t;
+}
+
+// Les écarts les plus importants de la zone, formulés en phrases actionnables
+function calculerPriorites(d, d2, stores, mois) {
+  const items = [];
+  const t = totauxZone(d, d2, stores);
+
+  if (t.occasion > 0 && t.ratioATM != null && t.ratioATM < ATM_OBJ) {
+    const zeros = stores.filter(s => (d2?.atm?.[s]?.total || 0) === 0);
+    items.push({
+      poids: (ATM_OBJ - t.ratioATM) / ATM_OBJ * 1.3,
+      titre: `ATM : ${t.atm} contrat${t.atm > 1 ? "s" : ""} pour ${t.occasion} mobiles d'occasion vendus`,
+      detail: zeros.length
+        ? `${zeros.length} magasin${zeros.length > 1 ? "s" : ""} sur ${stores.length} ${zeros.length > 1 ? "sont" : "est"} à zéro : ${zeros.join(", ")}. C'est la vente la plus simple à associer — le réflexe se prend au comptoir, pas après.`
+        : `Le taux de transformation reste sous l'objectif sur l'ensemble de la zone.`,
+      valeur: pct(t.ratioATM), objectif: `objectif ${ATM_OBJ} %`, ton: "bad",
+    });
+  }
+
+  const objMobileoZone = MOBILEO_OBJ * stores.length;
+  const projMobileo = projeter(t.mobileo, mois);
+  if (projMobileo != null && projMobileo < objMobileoZone) {
+    const zeros = stores.filter(s => (d2?.mobileo?.[s]?.total || 0) === 0);
+    items.push({
+      poids: (objMobileoZone - projMobileo) / objMobileoZone,
+      titre: `Mobileo : ${t.mobileo} contrat${t.mobileo > 1 ? "s" : ""} signé${t.mobileo > 1 ? "s" : ""} sur la zone`,
+      detail: `Projection à ${projMobileo} pour un objectif de ${objMobileoZone} à ${15 * stores.length}.` +
+        (zeros.length ? ` Toujours à zéro : ${zeros.join(", ")}.` : ""),
+      valeur: `${t.mobileo}`, objectif: `≈ ${projMobileo} projetés`, ton: projMobileo < objMobileoZone * 0.5 ? "bad" : "warn",
+    });
+  }
+
+  for (const s of stores) {
+    const occ = d?.occasion?.[s];
+    if (occ?.volume != null && occ?.objectif) {
+      const proj = projeter(occ.volume, mois);
+      if (proj != null && proj < occ.objectif * 0.7) {
+        items.push({
+          poids: (occ.objectif - proj) / occ.objectif,
+          titre: `${s} : ${occ.volume} mobile${occ.volume > 1 ? "s" : ""} d'occasion en ${mois.ecoules} jour${mois.ecoules > 1 ? "s" : ""} ouvré${mois.ecoules > 1 ? "s" : ""}`,
+          detail: `Projection à ${proj} pour un objectif de ${occ.objectif}. À regarder ensemble : stock disponible, mise en avant, temps passé en réparation.`,
+          valeur: `${occ.volume}`, objectif: `objectif ${occ.objectif}`, ton: "bad",
+        });
       }
     }
-    return { forts, faibles };
-  };
-  const synthese = computeSynthese();
-  const faits = (data?.faitsMarquants && data.faitsMarquants.length)
-    ? data.faitsMarquants
-    : (data?.syntheseRZ ? [data.syntheseRZ] : []);
+    const acc = d?.accessoires?.[s];
+    if (acc?.ratio != null && acc.ratio < ACC_OBJ * 0.9) {
+      items.push({
+        poids: (ACC_OBJ - acc.ratio) / ACC_OBJ * 1.1,
+        titre: `${s} : ratio accessoires à ${pct(acc.ratio)}`,
+        detail: `Sous l'objectif de ${ACC_OBJ} %. C'est le levier le plus rapide sur la marge — proposition systématique en caisse.`,
+        valeur: pct(acc.ratio), objectif: `objectif ${ACC_OBJ} %`, ton: "bad",
+      });
+    }
+    const gp = d?.gp?.[s];
+    if (gp?.ratio != null && gp.ratio < GP_OBJ * 0.9) {
+      items.push({
+        poids: (GP_OBJ - gp.ratio) / GP_OBJ,
+        titre: `${s} : ratio GP à ${pct(gp.ratio)}`,
+        detail: `Sous l'objectif de ${GP_OBJ} %. La garantie doit être présentée dans chaque devis, pas seulement sur les réparations chères.`,
+        valeur: pct(gp.ratio), objectif: `objectif ${GP_OBJ} %`, ton: "bad",
+      });
+    }
+  }
+
+  return items.sort((a, b) => b.poids - a.poids).slice(0, 3);
+}
+
+// ─── VUE D'ENSEMBLE ───────────────────────────────────────────────────────────
+function Dashboard({ user, data, onOpenStore }) {
+  const isRZ = user.role === "rz";
+  const stores = isRZ ? STORES_ORDER : [user.store];
+  const d = data?.page1, d2 = data?.page2;
+  const mois = moisEnCours();
+  const t = totauxZone(d, d2, stores);
+  const priorites = calculerPriorites(d, d2, stores, mois);
+  const faits = (data?.faitsMarquants?.length ? data.faitsMarquants : data?.syntheseRZ ? [data.syntheseRZ] : []);
+
+  const classement = [...stores].sort((a, b) =>
+    (d?.accessoires?.[b]?.margeTotal || 0) - (d?.accessoires?.[a]?.margeTotal || 0));
+
+  const tuiles = [
+    {
+      lbl: isRZ ? "Marge zone · mois en cours" : "Marge du mois", hero: true,
+      val: eur(t.margeTotal),
+      foot: <>Projection fin de mois <b>≈ {eur(projeter(t.margeTotal, mois) || 0)}</b></>,
+    },
+    {
+      lbl: "Ratio accessoires", val: pct(t.ratioAcc),
+      meter: { value: t.ratioAcc, max: 40, target: ACC_OBJ, status: statusFor(t.ratioAcc, ACC_OBJ) },
+      foot: <Chip status={statusFor(t.ratioAcc, ACC_OBJ)}>{t.ratioAcc >= ACC_OBJ ? `Objectif ${ACC_OBJ} % tenu` : `Objectif ${ACC_OBJ} % non atteint`}</Chip>,
+    },
+    {
+      lbl: "Ratio GP", val: pct(t.ratioGP),
+      meter: { value: t.ratioGP, max: 35, target: GP_OBJ, status: statusFor(t.ratioGP, GP_OBJ) },
+      foot: <Chip status={statusFor(t.ratioGP, GP_OBJ)}>{t.ratioGP >= GP_OBJ ? `Objectif ${GP_OBJ} % tenu` : `Objectif ${GP_OBJ} % non atteint`}</Chip>,
+    },
+    {
+      lbl: "Mobiles d'occasion", val: `${t.occasion}`,
+      meter: { value: t.occasion, max: t.occObjectif || 1, target: t.occObjectif, status: statusFor(projeter(t.occasion, mois), t.occObjectif) },
+      foot: <>Projection <b>≈ {projeter(t.occasion, mois) ?? "—"}</b> · objectif {t.occObjectif}</>,
+    },
+    {
+      lbl: "Forfaits Mobileo", val: `${t.mobileo}`,
+      meter: { value: t.mobileo, max: 15 * stores.length, target: MOBILEO_OBJ * stores.length, status: statusFor(projeter(t.mobileo, mois), MOBILEO_OBJ * stores.length) },
+      foot: <>Projection <b>≈ {projeter(t.mobileo, mois) ?? "—"}</b> · objectif {MOBILEO_OBJ * stores.length} à {15 * stores.length}</>,
+    },
+    {
+      lbl: "Contrats ATM", val: `${t.atm}`,
+      meter: { value: t.ratioATM, max: 25, target: ATM_OBJ, status: statusFor(t.ratioATM, ATM_OBJ) },
+      foot: <Chip status={statusFor(t.ratioATM, ATM_OBJ)}>{t.ratioATM != null ? `${pct(t.ratioATM)} des occasions · objectif ${ATM_OBJ} %` : "Aucune occasion vendue"}</Chip>,
+    },
+  ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: C.navy }}>Vue d'ensemble</h2>
-          <p style={{ margin: "2px 0 0", fontSize: 12, color: C.gray400 }}>{data?.period} · données Notion du {data?.updated}</p>
-        </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <a href={NOTION_PAGE1_URL} target="_blank" rel="noopener noreferrer"><Btn size="sm" variant="secondary">📄 Analyse détaillée — Page 1</Btn></a>
-          <a href={NOTION_PAGE2_URL} target="_blank" rel="noopener noreferrer"><Btn size="sm" variant="secondary">📄 Analyse détaillée — Page 2</Btn></a>
-        </div>
+    <div className="stack">
+      <div className="ctx">
+        <h1 className="h-screen">Vue d'ensemble</h1>
+        <p>
+          {data?.period} · <b>{mois.ecoules} jours ouvrés écoulés sur {mois.total}</b>
+          {data?.updated ? ` · données du ${data.updated}` : ""}
+        </p>
       </div>
 
-      {user.role === "rz" && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 10 }}>
-          {[
-            { label: "Marge totale zone", val: eur(tz.margeTotal), icon: "💰" },
-            { label: "Ratio Accessoires", val: tz.margeTotal ? `${((tz.margeAcc / tz.margeTotal) * 100).toFixed(1)}%` : "—", icon: "🛒" },
-            { label: "Ratio GP zone",     val: tz.margeTotal ? `${((tz.margeGP  / tz.margeTotal) * 100).toFixed(1)}%` : "—", icon: "🛡️" },
-            { label: "Mobiles Occasion",  val: `${tz.occasion} unités`, icon: "📱" },
-            { label: "Forfaits Mobileo",  val: `${tz.mobileo} contrats`, icon: "📶" },
-            { label: "Contrats ATM",      val: `${tz.atm} sur ${tz.occasion} occ.`, icon: "🔒" },
-          ].map(({ label, val, icon }) => (
-            <Card key={label} style={{ padding: "14px 16px" }}>
-              <div style={{ fontSize: 18, marginBottom: 4 }}>{icon}</div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: C.navy }}>{val}</div>
-              <div style={{ fontSize: 11, color: C.gray400, marginTop: 2 }}>{label}</div>
-            </Card>
+      <div className="grid grid-3">
+        {tuiles.map(({ lbl, val, foot, meter, hero }) => (
+          <div className={`tile${hero ? " hero" : ""}`} key={lbl}>
+            <div className="lbl">{lbl}</div>
+            <div className="val">{val}</div>
+            {meter && <Gauge value={meter.value} max={meter.max} target={meter.target}
+              color={meter.status === "ok" ? C.ok : meter.status === "warn" ? C.warn : meter.status === "bad" ? C.bad : C.gray400} />}
+            <div className="foot">{foot}</div>
+          </div>
+        ))}
+      </div>
+
+      {priorites.length > 0 && (
+        <Card className="pad-0">
+          <div style={{ padding: "16px 22px 4px" }}>
+            <div className="lbl">Ce qui doit m'occuper cette semaine</div>
+          </div>
+          {priorites.map((p, i) => (
+            <div className="prio-item" key={i}>
+              <div className="prio-rank">{i + 1}</div>
+              <div className="prio-txt"><b>{p.titre}</b><p>{p.detail}</p></div>
+              <div className="prio-num">
+                <div className="v" style={{ color: p.ton === "bad" ? C.bad : C.warn }}>{p.valeur}</div>
+                <div className="o">{p.objectif}</div>
+              </div>
+            </div>
           ))}
-        </div>
+        </Card>
       )}
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 12 }}>
-        <Card style={{ borderTop: `3px solid ${C.ok}` }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: C.ok, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>✓ Points forts</div>
-          {synthese.forts.length === 0
-            ? <div style={{ fontSize: 12, color: C.gray400, fontStyle: "italic" }}>Aucun objectif pleinement atteint ce mois-ci.</div>
-            : <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {synthese.forts.map((f, i) => <div key={i} style={{ fontSize: 12, color: C.text, display: "flex", gap: 7, lineHeight: 1.5 }}><span style={{ color: C.ok }}>●</span>{f}</div>)}
-              </div>
-          }
-        </Card>
-        <Card style={{ borderTop: `3px solid ${C.bad}` }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: C.bad, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>⚠ Points à travailler</div>
-          {synthese.faibles.length === 0
-            ? <div style={{ fontSize: 12, color: C.gray400, fontStyle: "italic" }}>Aucun point critique. Bon mois !</div>
-            : <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {synthese.faibles.map((f, i) => <div key={i} style={{ fontSize: 12, color: C.text, display: "flex", gap: 7, lineHeight: 1.5 }}><span style={{ color: C.bad }}>●</span>{f}</div>)}
-              </div>
-          }
-        </Card>
-      </div>
 
       {faits.length > 0 && (
-        <Card accent={C.accent}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: C.accent, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>⭐ Ce que je retiens de cette journée</div>
-          {faits.map((f, i) => <p key={i} style={{ margin: i === 0 ? 0 : "10px 0 0", fontSize: 14, color: C.text, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{f}</p>)}
-        </Card>
+        <div className="quote">
+          <div className="lbl" style={{ color: C.accent }}>Ce que je retiens</div>
+          {faits.map((f, i) => <p key={i}>{f}</p>)}
+        </div>
       )}
 
-      {(() => {
-        const retours = [];
-        for (const store of stores) {
-          const items = [d?.analysis?.accessoires?.[store], d?.analysis?.gp?.[store], d2?.analysis?.mobileo?.[store], d2?.analysis?.atm?.[store]].filter(Boolean);
-          if (items.length) retours.push({ store, items });
-        }
-        if (retours.length === 0) return null;
-        return (
-          <Card>
-            <div style={{ fontSize: 11, fontWeight: 700, color: C.gray400, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 12 }}>💬 Mes retours par magasin</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {retours.map(({ store, items }) => (
-                <div key={store} style={{ padding: "10px 12px", background: C.bg, borderRadius: 8 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.navy, marginBottom: 6 }}>{store}</div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                    {items.map((t, i) => <div key={i} style={{ fontSize: 12, color: C.text, lineHeight: 1.55, display: "flex", gap: 6 }}><span style={{ color: C.accent }}>•</span>{t}</div>)}
+      <div>
+        <div className="lbl" style={{ marginBottom: 13 }}>
+          {isRZ ? `Les ${stores.length} magasins — mois en cours` : "Mon magasin"}
+        </div>
+        <div className="grid grid-stores">
+          {classement.map((store, rang) => {
+            const acc = d?.accessoires?.[store], gp = d?.gp?.[store], occ = d?.occasion?.[store];
+            const mob = d2?.mobileo?.[store], atm = d2?.atm?.[store];
+            const objOcc = occ?.objectif ?? OCC_OBJ[store] ?? 0;
+            const kpis = [
+              { k: "Acc.", v: acc?.ratio, max: 40, target: ACC_OBJ, txt: pct(acc?.ratio), s: statusFor(acc?.ratio, ACC_OBJ) },
+              { k: "GP", v: gp?.ratio, max: 35, target: GP_OBJ, txt: pct(gp?.ratio), s: statusFor(gp?.ratio, GP_OBJ) },
+              { k: "Occ.", v: occ?.volume, max: objOcc || 1, target: objOcc, txt: occ?.volume != null ? `${occ.volume}/${objOcc}` : "—", s: statusFor(projeter(occ?.volume, mois), objOcc) },
+              { k: "Mob.", v: mob?.total, max: 15, target: MOBILEO_OBJ, txt: mob?.total != null ? `${mob.total}/${MOBILEO_OBJ}` : "—", s: statusFor(projeter(mob?.total, mois), MOBILEO_OBJ) },
+              { k: "ATM", v: atm?.ratio, max: 25, target: ATM_OBJ, txt: pct(atm?.ratio), s: statusFor(atm?.ratio, ATM_OBJ) },
+            ];
+            const atteints = kpis.filter(x => x.s === "ok").length;
+            const ton = atteints >= 4 ? "ok" : atteints >= 2 ? "warn" : "bad";
+            return (
+              <button className={`store s-${ton}`} key={store} onClick={() => onOpenStore(store)}>
+                <h3>{store}</h3>
+                <div className="team">{STORE_TEAM[store] || "—"}</div>
+                <div className="marge">{eur(acc?.margeTotal || 0)}</div>
+                <div className="marge-lbl">de marge ce mois-ci</div>
+                {kpis.map(({ k, v, max, target, txt, s }) => (
+                  <div className="kpiline" key={k}>
+                    <span>{k}</span>
+                    <div className="bar">
+                      <i className={`fill-${s}`} style={{ width: `${Math.max(0, Math.min(100, ((v || 0) / (max || 1)) * 100))}%` }} />
+                      {target ? <u style={{ left: `${Math.min(98, (target / (max || 1)) * 100)}%` }} /> : null}
+                    </div>
+                    <b className={`txt-${s === "neutral" ? "muted" : s}`}>{txt}</b>
                   </div>
+                ))}
+                <div className="score">
+                  <Chip status={ton}>{atteints} objectif{atteints > 1 ? "s" : ""} sur 5</Chip>
+                  {isRZ && <span className="txt-muted">n<sup>o</sup>&nbsp;{rang + 1} zone</span>}
                 </div>
-              ))}
-            </div>
-          </Card>
-        );
-      })()}
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))", gap: 12 }}>
-        {stores.map(store => {
-          const acc = d?.accessoires?.[store], gp = d?.gp?.[store], occ = d?.occasion?.[store];
-          const mob = d2?.mobileo?.[store], atm = d2?.atm?.[store];
-          const kpis = [
-            { k: "Acc.", v: acc?.ratio, suf: "%", s: acc?.status },
-            { k: "GP",   v: gp?.ratio,  suf: "%", s: gp?.status },
-            { k: "Occ.", v: occ?.volume, suf: "", s: occ?.volume >= occ?.objectif ? "ok" : "bad" },
-            { k: "Mob.", v: mob?.total,  suf: "", s: mob?.total >= 10 ? "ok" : "bad" },
-            { k: "ATM",  v: atm?.ratio,  suf: "%", s: atm?.status },
-          ];
-          const okC = kpis.filter(x => x.s === "ok").length;
-          const tc = okC >= 4 ? C.ok : okC >= 2 ? C.warn : C.bad;
-          return (
-            <Card key={store} style={{ borderTop: `3px solid ${tc}` }}>
-              <div style={{ fontWeight: 800, fontSize: 13, color: C.navy, marginBottom: 6 }}>{store}</div>
-              <div style={{ fontSize: 11, color: tc, fontWeight: 700, marginBottom: 10 }}>{okC}/5 objectifs atteints</div>
-              {kpis.map(({ k, v, suf, s }) => (
-                <div key={k} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }}>
-                  <span style={{ color: C.gray400 }}>{k}</span>
-                  <span style={{ color: v == null ? C.gray200 : statusC(s), fontWeight: 700 }}>{v == null ? "—" : `${v}${suf}`}</span>
-                </div>
-              ))}
-            </Card>
-          );
-        })}
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
 }
 
-// ─── ANALYSIS LIST ─────────────────────────────────────────────────────────────
 function AnalysisList({ isRZ, stores, store, analysisMap }) {
   if (isRZ) {
     return (
@@ -435,141 +618,349 @@ function AnalysisList({ isRZ, stores, store, analysisMap }) {
 }
 
 // ─── RESULTS PAGE ──────────────────────────────────────────────────────────────
-function ResultsPage({ user, data, onRefresh, refreshing }) {
+// ─── Tableau des vendeurs (zone ou magasin) ──────────────────────────────────
+function VendorsTable({ rows, mois, showStore = true }) {
+  if (!rows?.length) {
+    return <div className="empty">Aucun résultat vendeur pour la période. Les journées sont peut-être en cours de saisie.</div>;
+  }
+  const tri = [...rows].sort((a, b) => (b.margeTotale || 0) - (a.margeTotale || 0));
+  const inactif = (v) => !v.margeTotale || v.margeTotale <= 0;
+
+  const cellRatio = (val, obj) => val == null
+    ? <span className="txt-muted">—</span>
+    : <span className={`txt-${statusFor(val, obj)}`} style={{ fontWeight: 700 }}>{pct(val)}</span>;
+
+  return (
+    <>
+      <div className="tbl-wrap">
+        <table className="tbl">
+          <thead><tr>
+            <th>Vendeur</th>
+            <th className="r">Marge</th><th className="r">dont access.</th>
+            <th className="r">Acc.</th><th className="r">GP</th>
+            <th className="r">Occ.</th><th className="r">Mobileo</th><th className="r">ATM</th>
+          </tr></thead>
+          <tbody>
+            {tri.map(v => (
+              <tr key={`${v.store}-${v.name}`} className={inactif(v) ? "dim" : ""}>
+                <td className="name">
+                  {v.name}
+                  <div className="cell-sub">
+                    {showStore ? v.store : (v.role || "")}
+                    {v.jours ? ` · ${v.jours} jour${v.jours > 1 ? "s" : ""} d'activité` : ""}
+                  </div>
+                </td>
+                <td className="r"><span className="big">{eur(v.margeTotale)}</span></td>
+                <td className="r">{eur(v.margeAccessoires)}</td>
+                <td className="r">{cellRatio(v.ratioAccessoires, ACC_OBJ)}</td>
+                <td className="r">{cellRatio(v.ratioGP, GP_OBJ)}</td>
+                <td className="r">{v.occasion ?? 0}</td>
+                <td className={`r${!v.mobileo ? " txt-bad" : ""}`} style={{ fontWeight: v.mobileo ? 400 : 700 }}>{v.mobileo ?? 0}</td>
+                <td className={`r${!v.atm ? " txt-bad" : " txt-ok"}`} style={{ fontWeight: 700 }}>{v.atm ?? 0}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="mcards">
+        {tri.map(v => (
+          <div className="mcard" key={`m-${v.store}-${v.name}`}>
+            <div className="top">
+              <div>
+                <h4>{v.name}</h4>
+                <div className="meta">{showStore ? v.store : v.role}</div>
+              </div>
+              <span className="big">{eur(v.margeTotale)}</span>
+            </div>
+            <div className="mrow"><span>Accessoires</span><b className={`txt-${statusFor(v.ratioAccessoires, ACC_OBJ)}`}>{pct(v.ratioAccessoires)}</b></div>
+            <div className="mrow"><span>Garantie Plus</span><b className={`txt-${statusFor(v.ratioGP, GP_OBJ)}`}>{pct(v.ratioGP)}</b></div>
+            <div className="mrow"><span>Mobiles d'occasion</span><b>{v.occasion ?? 0}</b></div>
+            <div className="mrow"><span>Mobileo</span><b className={!v.mobileo ? "txt-bad" : ""}>{v.mobileo ?? 0}</b></div>
+            <div className="mrow"><span>ATM</span><b className={!v.atm ? "txt-bad" : "txt-ok"}>{v.atm ?? 0}</b></div>
+          </div>
+        ))}
+      </div>
+
+      {tri.some(inactif) && (
+        <p className="note">
+          <b style={{ color: C.gray600 }}>Lignes grisées :</b> aucune activité enregistrée sur la période — congés ou absence.
+          Leur score n'est pas représentatif du mois.
+        </p>
+      )}
+    </>
+  );
+}
+
+// ─── RÉSULTATS — par magasin / par vendeur ───────────────────────────────────
+function ResultsPage({ user, data, vendors, vendorsError, mois, onRefresh, refreshing, onOpenStore }) {
   const isRZ = user.role === "rz";
+  const [vue, setVue] = useState("magasin");
+  const [indicateur, setIndicateur] = useState("accessoires");
   const [filterStore, setFilterStore] = useState("all");
   const allStores = isRZ ? STORES_ORDER : [user.store];
   const stores = (isRZ && filterStore !== "all") ? [filterStore] : allStores;
   const d = data?.page1, d2 = data?.page2;
 
-  const TH = ({ children, a = "left" }) => <th style={{ textAlign: a, padding: "8px 10px", fontSize: 11, fontWeight: 700, color: C.gray400, textTransform: "uppercase", borderBottom: `2px solid ${C.gray50}`, whiteSpace: "nowrap" }}>{children}</th>;
-  const TD = ({ children, a = "left", b }) => <td style={{ padding: "9px 10px", fontSize: 13, textAlign: a, fontWeight: b ? 700 : 400 }}>{children}</td>;
+  const INDICATEURS = [
+    { id: "accessoires", label: "Accessoires", objectif: `≥ ${ACC_OBJ} %` },
+    { id: "gp",          label: "Garantie Plus", objectif: `≥ ${GP_OBJ} %` },
+    { id: "occasion",    label: "Mobiles d'occasion", objectif: "objectif par magasin" },
+    { id: "mobileo",     label: "Mobileo", objectif: `${MOBILEO_OBJ} à 15 par magasin` },
+    { id: "atm",         label: "ATM", objectif: `≥ ${ATM_OBJ} % des occasions` },
+  ];
+  const courant = INDICATEURS.find(i => i.id === indicateur);
+
+  // Une ligne par magasin, quel que soit l'indicateur choisi
+  const ligne = (store) => {
+    if (indicateur === "accessoires") {
+      const a = d?.accessoires?.[store]; if (!a) return null;
+      const s = statusFor(a.ratio, ACC_OBJ);
+      return { cols: [eur(a.margeAcc), eur(a.margeTotal)], valeur: pct(a.ratio), statut: s,
+        trend: a.trend, jauge: { v: a.ratio, max: 40, target: ACC_OBJ }, libelles: ["Marge accessoires", "Marge totale"] };
+    }
+    if (indicateur === "gp") {
+      const a = d?.gp?.[store]; if (!a) return null;
+      const s = statusFor(a.ratio, GP_OBJ);
+      return { cols: [eur(a.margeGP), eur(a.margeTotal)], valeur: pct(a.ratio), statut: s,
+        trend: a.trend, jauge: { v: a.ratio, max: 35, target: GP_OBJ }, libelles: ["Marge GP", "Marge totale"] };
+    }
+    if (indicateur === "occasion") {
+      const a = d?.occasion?.[store]; if (!a) return null;
+      const obj = a.objectif ?? OCC_OBJ[store];
+      const proj = projeter(a.volume, mois);
+      return { cols: [eur(a.marge), `${obj}`], valeur: `${a.volume}`, statut: statusFor(proj, obj),
+        trend: a.trend, jauge: { v: a.volume, max: obj || 1, target: obj },
+        libelles: ["Marge occasion", "Objectif"], extra: proj != null ? `projection ≈ ${proj}` : null };
+    }
+    if (indicateur === "mobileo") {
+      const a = d2?.mobileo?.[store]; if (!a) return null;
+      const proj = projeter(a.total, mois);
+      const vendeurs = Object.entries(a.vendeurs || {}).map(([n, v]) => `${n} ${v}`).join(" · ");
+      return { cols: [vendeurs || "—", `${MOBILEO_OBJ} à 15`], valeur: `${a.total}`, statut: statusFor(proj, MOBILEO_OBJ),
+        trend: a.trend, jauge: { v: a.total, max: 15, target: MOBILEO_OBJ },
+        libelles: ["Détail vendeurs", "Objectif"], extra: proj != null ? `projection ≈ ${proj}` : null };
+    }
+    const a = d2?.atm?.[store]; if (!a) return null;
+    return { cols: [`${a.total}`, `${a.mobOcc}`], valeur: pct(a.ratio), statut: statusFor(a.ratio, ATM_OBJ),
+      trend: a.trend, jauge: { v: a.ratio, max: 25, target: ATM_OBJ }, libelles: ["Contrats ATM", "Mobiles occasion"] };
+  };
+
+  const analysisMap = indicateur === "accessoires" ? d?.analysis?.accessoires
+    : indicateur === "gp" ? d?.analysis?.gp
+    : indicateur === "mobileo" ? d2?.analysis?.mobileo
+    : indicateur === "atm" ? d2?.analysis?.atm : null;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+    <div className="stack">
+      <div className="ctx" style={{ justifyContent: "space-between", width: "100%" }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: C.navy }}>Résultats commerciaux</h2>
-          <p style={{ margin: "2px 0 0", fontSize: 12, color: C.gray400 }}>{data?.period} · données du {data?.updated}</p>
+          <h1 className="h-screen">Résultats</h1>
+          <p>{data?.period} · {mois.ecoules} jours ouvrés écoulés sur {mois.total}</p>
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          {isRZ && (
-            <select value={filterStore} onChange={e => setFilterStore(e.target.value)}
-              style={{ border: `1.5px solid ${C.gray200}`, borderRadius: 8, padding: "7px 12px", fontSize: 13, fontFamily: "inherit", color: C.navy, background: C.white, cursor: "pointer" }}>
-              <option value="all">🏢 Tous les magasins</option>
-              {STORES_ORDER.map(s => <option key={s} value={s}>{s}</option>)}
+        {isRZ && <Btn size="sm" variant="secondary" onClick={onRefresh} disabled={refreshing}>
+          {refreshing ? "Synchronisation…" : "Actualiser depuis Notion"}
+        </Btn>}
+      </div>
+
+      <div className="seg" role="tablist">
+        <button className={vue === "magasin" ? "on" : ""} onClick={() => setVue("magasin")}>Par magasin</button>
+        <button className={vue === "vendeur" ? "on" : ""} onClick={() => setVue("vendeur")}>Par vendeur</button>
+      </div>
+
+      {vue === "magasin" ? (
+        <>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+            <select className="select" value={indicateur} onChange={e => setIndicateur(e.target.value)}>
+              {INDICATEURS.map(i => <option key={i.id} value={i.id}>{i.label}</option>)}
             </select>
-          )}
-          {isRZ && <Btn size="sm" variant="secondary" onClick={onRefresh} style={{ opacity: refreshing ? 0.6 : 1 }}>{refreshing ? "⏳ Synchro…" : "🔄 Actualiser"}</Btn>}
+            {isRZ && (
+              <select className="select" value={filterStore} onChange={e => setFilterStore(e.target.value)}>
+                <option value="all">Tous les magasins</option>
+                {STORES_ORDER.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            )}
+            <span className="meta">Objectif : {courant.objectif}</span>
+          </div>
+
+          <Card>
+            <SectionHead>{courant.label}</SectionHead>
+            <div className="tbl-wrap">
+              <table className="tbl">
+                <thead><tr>
+                  <th>Magasin</th>
+                  <th className="r">{(ligne(stores[0])?.libelles || ["", ""])[0]}</th>
+                  <th className="r">{(ligne(stores[0])?.libelles || ["", ""])[1]}</th>
+                  <th className="r">Valeur</th>
+                  <th className="c">Tendance</th>
+                  <th style={{ width: 130 }}>Progression</th>
+                </tr></thead>
+                <tbody>
+                  {stores.map(store => {
+                    const l = ligne(store); if (!l) return null;
+                    return (
+                      <tr key={store} className="clickable" onClick={() => onOpenStore(store)}>
+                        <td className="name">{store}{l.extra && <div className="cell-sub">{l.extra}</div>}</td>
+                        <td className="r">{l.cols[0]}</td>
+                        <td className="r">{l.cols[1]}</td>
+                        <td className="r"><span className={`big txt-${l.statut}`}>{l.valeur}</span></td>
+                        <td className="c"><Trend value={l.trend} /></td>
+                        <td><Gauge flat value={l.jauge.v} max={l.jauge.max} target={l.jauge.target}
+                          color={l.statut === "ok" ? C.ok : l.statut === "warn" ? C.warn : C.bad} /></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mcards">
+              {stores.map(store => {
+                const l = ligne(store); if (!l) return null;
+                return (
+                  <div className="mcard" key={`m-${store}`} onClick={() => onOpenStore(store)}>
+                    <div className="top">
+                      <div><h4>{store}</h4>{l.extra && <div className="meta">{l.extra}</div>}</div>
+                      <Chip status={l.statut}>{l.valeur}</Chip>
+                    </div>
+                    <div className="mrow"><span>{l.libelles[0]}</span><b>{l.cols[0]}</b></div>
+                    <div className="mrow"><span>{l.libelles[1]}</span><b>{l.cols[1]}</b></div>
+                    <div className="mrow"><span>Tendance</span><b><Trend value={l.trend} /></b></div>
+                    <Gauge value={l.jauge.v} max={l.jauge.max} target={l.jauge.target}
+                      color={l.statut === "ok" ? C.ok : l.statut === "warn" ? C.warn : C.bad} />
+                  </div>
+                );
+              })}
+            </div>
+
+            <AnalysisList isRZ={isRZ} stores={stores} store={user.store} analysisMap={analysisMap} />
+          </Card>
+        </>
+      ) : (
+        <Card>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
+            <div>
+              <h3 className="h-section" style={{ margin: 0 }}>
+                {isRZ ? "Les vendeurs de la zone" : `L'équipe de ${user.store}`} — mois en cours
+              </h3>
+              <p className="meta" style={{ margin: "3px 0 0" }}>
+                Cumul des journées saisies · classement par marge générée
+              </p>
+            </div>
+            <Chip status="neutral">Objectifs : accessoires {ACC_OBJ} % · GP {GP_OBJ} % · ATM {ATM_OBJ} % des occasions</Chip>
+          </div>
+          {vendorsError
+            ? <div className="empty">Résultats par vendeur indisponibles ({vendorsError}).</div>
+            : <VendorsTable rows={vendors} mois={mois} showStore={isRZ} />}
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// ─── ÉCRAN MAGASIN ───────────────────────────────────────────────────────────
+function StorePage({ user, store, data, vendors, actions, mois, onBack }) {
+  const isRZ = user.role === "rz";
+  const d = data?.page1, d2 = data?.page2;
+  const acc = d?.accessoires?.[store], gp = d?.gp?.[store], occ = d?.occasion?.[store];
+  const mob = d2?.mobileo?.[store], atm = d2?.atm?.[store];
+  const objOcc = occ?.objectif ?? OCC_OBJ[store] ?? 0;
+  const equipe = (vendors || []).filter(v => v.store === store);
+  const plan = (actions || []).filter(a => a.store === store && (isRZ || a.published));
+  const faites = plan.filter(a => a.state === "Fait").length;
+
+  const commentaires = [
+    d?.analysis?.accessoires?.[store], d?.analysis?.gp?.[store],
+    d2?.analysis?.mobileo?.[store], d2?.analysis?.atm?.[store],
+  ].filter(Boolean);
+
+  const tuiles = [
+    { lbl: "Marge du mois", hero: true, val: eur(acc?.margeTotal || 0),
+      foot: <>Projection <b>≈ {eur(projeter(acc?.margeTotal, mois) || 0)}</b></> },
+    { lbl: "Accessoires", val: pct(acc?.ratio),
+      meter: { v: acc?.ratio, max: 40, target: ACC_OBJ, s: statusFor(acc?.ratio, ACC_OBJ) },
+      foot: <><Trend value={acc?.trend} /> vs M-1</> },
+    { lbl: "Garantie Plus", val: pct(gp?.ratio),
+      meter: { v: gp?.ratio, max: 35, target: GP_OBJ, s: statusFor(gp?.ratio, GP_OBJ) },
+      foot: <><Trend value={gp?.trend} /> vs M-1</> },
+    { lbl: "Mobiles d'occasion", val: occ?.volume != null ? <>{occ.volume} <small>/ {objOcc}</small></> : "—",
+      meter: { v: occ?.volume, max: objOcc || 1, target: objOcc, s: statusFor(projeter(occ?.volume, mois), objOcc) },
+      foot: <>Projection ≈ {projeter(occ?.volume, mois) ?? "—"}</> },
+    { lbl: "Forfaits Mobileo", val: mob?.total != null ? <>{mob.total} <small>/ {MOBILEO_OBJ}</small></> : "—",
+      meter: { v: mob?.total, max: 15, target: MOBILEO_OBJ, s: statusFor(projeter(mob?.total, mois), MOBILEO_OBJ) },
+      foot: <>Projection ≈ {projeter(mob?.total, mois) ?? "—"}</> },
+    { lbl: "Contrats ATM", val: atm?.total != null ? `${atm.total}` : "—",
+      meter: { v: atm?.ratio, max: 25, target: ATM_OBJ, s: statusFor(atm?.ratio, ATM_OBJ) },
+      foot: <Chip status={statusFor(atm?.ratio, ATM_OBJ)}>{atm ? `${pct(atm.ratio)} de ${atm.mobOcc} occasions` : "—"}</Chip> },
+  ];
+
+  return (
+    <div className="stack">
+      <div>
+        <button className="btn btn-ghost btn-sm" onClick={onBack} style={{ marginBottom: 12 }}>← Retour</button>
+        <div className="ctx">
+          <h1 className="h-screen">{store}</h1>
+          <p>{(STORE_STAFF[store] || []).join(" · ")} · {mois.ecoules} jours ouvrés écoulés sur {mois.total}</p>
         </div>
       </div>
 
-      {/* ACCESSOIRES */}
+      <div className="grid grid-3">
+        {tuiles.map(({ lbl, val, foot, meter, hero }) => (
+          <div className={`tile${hero ? " hero" : ""}`} key={lbl}>
+            <div className="lbl">{lbl}</div>
+            <div className="val">{val}</div>
+            {meter && <Gauge value={meter.v} max={meter.max} target={meter.target}
+              color={meter.s === "ok" ? C.ok : meter.s === "warn" ? C.warn : meter.s === "bad" ? C.bad : C.gray400} />}
+            <div className="foot">{foot}</div>
+          </div>
+        ))}
+      </div>
+
       <Card>
-        <SectionHead>🛒 Ratio Accessoires — Objectif ≥ 25%</SectionHead>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead><tr><TH>Magasin</TH><TH a="right">Marge Acc.</TH><TH a="right">Marge Tot.</TH><TH a="right">Ratio</TH><TH a="center">Tend.</TH><TH>Progression</TH></tr></thead>
-            <tbody>
-              {stores.map((s, i) => { const a = d?.accessoires?.[s]; if (!a) return null;
-                return <tr key={s} style={{ background: i % 2 ? C.bg : C.white }}>
-                  <TD b>{s}</TD><TD a="right">{eur(a.margeAcc)}</TD><TD a="right">{eur(a.margeTotal)}</TD>
-                  <TD a="right"><span style={{ fontWeight: 800, color: statusC(a.status) }}>{a.ratio}%</span></TD>
-                  <TD a="center">{trendLabel(a.trend)}</TD><TD><Gauge value={a.ratio} max={40} target={25} color={statusC(a.status)} /></TD>
-                </tr>; })}
-            </tbody>
-          </table>
-        </div>
-        <AnalysisList isRZ={isRZ} stores={stores} store={user.store} analysisMap={d?.analysis?.accessoires} />
+        <SectionHead>L'équipe — résultats du mois en cours</SectionHead>
+        <VendorsTable rows={equipe} mois={mois} showStore={false} />
       </Card>
 
-      {/* GP */}
-      <Card>
-        <SectionHead>🛡️ Ratio Garantie Plus — Objectif ≥ 20%</SectionHead>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead><tr><TH>Magasin</TH><TH a="right">Marge GP</TH><TH a="right">Marge Tot.</TH><TH a="right">Ratio</TH><TH a="center">Tend.</TH><TH>Progression</TH></tr></thead>
-            <tbody>
-              {stores.map((s, i) => { const a = d?.gp?.[s]; if (!a) return null;
-                return <tr key={s} style={{ background: i % 2 ? C.bg : C.white }}>
-                  <TD b>{s}</TD><TD a="right">{eur(a.margeGP)}</TD><TD a="right">{eur(a.margeTotal)}</TD>
-                  <TD a="right"><span style={{ fontWeight: 800, color: statusC(a.status) }}>{a.ratio}%</span></TD>
-                  <TD a="center">{trendLabel(a.trend)}</TD><TD><Gauge value={a.ratio} max={35} target={20} color={statusC(a.status)} /></TD>
-                </tr>; })}
-            </tbody>
-          </table>
+      {commentaires.length > 0 && (
+        <div className="quote">
+          <div className="lbl" style={{ color: C.accent }}>Mon commentaire</div>
+          {commentaires.map((c, i) => <p key={i}>{c}</p>)}
         </div>
-        <AnalysisList isRZ={isRZ} stores={stores} store={user.store} analysisMap={d?.analysis?.gp} />
-      </Card>
+      )}
 
-      {/* OCCASION */}
       <Card>
-        <SectionHead>📱 Mobiles d'Occasion — Objectifs différenciés</SectionHead>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead><tr><TH>Magasin</TH><TH a="right">Volume</TH><TH a="right">Marge</TH><TH a="right">Objectif</TH><TH a="right">%</TH><TH a="center">Tend.</TH><TH>Progression</TH></tr></thead>
-            <tbody>
-              {stores.map((s, i) => { const a = d?.occasion?.[s]; if (!a) return null;
-                const pct = a.objectif ? Math.round((a.volume / a.objectif) * 100) : 0;
-                const col = pct >= 100 ? C.ok : pct >= 60 ? C.warn : C.bad;
-                return <tr key={s} style={{ background: i % 2 ? C.bg : C.white }}>
-                  <TD b>{s}</TD><TD a="right"><span style={{ fontWeight: 800, color: col, fontSize: 15 }}>{a.volume}</span></TD>
-                  <TD a="right">{eur(a.marge)}</TD><TD a="right" b>{a.objectif}</TD>
-                  <TD a="right"><span style={{ fontWeight: 700, color: col }}>{pct}%</span></TD>
-                  <TD a="center">{trendLabel(a.trend)}</TD><TD><Gauge value={a.volume} max={a.objectif} target={a.objectif} color={col} /></TD>
-                </tr>; })}
-            </tbody>
-          </table>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <div>
+            <h3 className="h-section" style={{ margin: 0 }}>Plan d'action</h3>
+            <p className="meta" style={{ margin: "3px 0 0" }}>Actions décidées ensemble · l'équipe coche au fur et à mesure</p>
+          </div>
+          {plan.length > 0 && <Chip status={faites === plan.length ? "ok" : "neutral"}>{faites} sur {plan.length} terminée{faites > 1 ? "s" : ""}</Chip>}
         </div>
-      </Card>
-
-      {/* MOBILEO */}
-      <Card>
-        <SectionHead>📶 Forfaits Mobileo — Objectif 10-15 / magasin</SectionHead>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead><tr><TH>Magasin</TH><TH>Vendeurs</TH><TH a="right">Total</TH><TH a="center">Tend.</TH><TH>Progression</TH></tr></thead>
-            <tbody>
-              {stores.map((s, i) => { const a = d2?.mobileo?.[s]; if (!a) return null;
-                const col = a.total >= 10 ? C.ok : a.total >= 6 ? C.warn : C.bad;
-                return <tr key={s} style={{ background: i % 2 ? C.bg : C.white }}>
-                  <TD b>{s}</TD>
-                  <TD><div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                    {Object.entries(a.vendeurs || {}).map(([v, n]) => <span key={v} style={{ fontSize: 12 }}>{v} : <strong style={{ color: n > 0 ? C.ok : C.gray200 }}>{n}</strong></span>)}
-                  </div></TD>
-                  <TD a="right"><span style={{ fontWeight: 800, color: col, fontSize: 16 }}>{a.total}</span></TD>
-                  <TD a="center">{trendLabel(a.trend)}</TD><TD><Gauge value={a.total} max={15} target={10} color={col} /></TD>
-                </tr>; })}
-            </tbody>
-          </table>
+        <div style={{ marginTop: 12 }}>
+          {plan.length === 0
+            ? <div className="empty">Aucune action en cours pour ce magasin.</div>
+            : plan.map(a => {
+                const done = a.state === "Fait", doing = a.state === "En cours";
+                return (
+                  <div className={`action${done ? " is-done" : ""}`} key={a.id}>
+                    <div className={`check${done ? " done" : doing ? " doing" : ""}`} />
+                    <div className="body">
+                      <b>{a.title}</b>
+                      <p>{[a.who, a.indicator, a.origin].filter(Boolean).join(" · ")}{a.notes ? ` — ${a.notes}` : ""}</p>
+                    </div>
+                    <div className="side">
+                      <Chip status={done ? "ok" : doing ? "warn" : "bad"}>{a.state || "À faire"}</Chip>
+                      {a.due && <span className="meta">{new Date(a.due).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" })}</span>}
+                    </div>
+                  </div>
+                );
+              })}
         </div>
-        <AnalysisList isRZ={isRZ} stores={stores} store={user.store} analysisMap={d2?.analysis?.mobileo} />
-      </Card>
-
-      {/* ATM */}
-      <Card>
-        <SectionHead>🔒 Assurances ATM — Objectif ≥ 10% des occ.</SectionHead>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead><tr><TH>Magasin</TH><TH a="right">ATM</TH><TH a="right">Mob. Occ.</TH><TH a="right">Ratio</TH><TH a="center">Tend.</TH><TH>Progression</TH></tr></thead>
-            <tbody>
-              {stores.map((s, i) => { const a = d2?.atm?.[s]; if (!a) return null;
-                const col = a.status === "ok" ? C.ok : a.status === "low" ? C.gray400 : C.bad;
-                return <tr key={s} style={{ background: i % 2 ? C.bg : C.white }}>
-                  <TD b>{s}</TD><TD a="right"><span style={{ fontWeight: 800, color: a.total > 0 ? C.ok : C.bad }}>{a.total}</span></TD>
-                  <TD a="right">{a.mobOcc}</TD><TD a="right"><span style={{ fontWeight: 800, color: col }}>{a.ratio}%</span></TD>
-                  <TD a="center">{trendLabel(a.trend)}</TD><TD><Gauge value={a.ratio} max={25} target={10} color={col} /></TD>
-                </tr>; })}
-            </tbody>
-          </table>
-        </div>
-        <AnalysisList isRZ={isRZ} stores={stores} store={user.store} analysisMap={d2?.analysis?.atm} />
       </Card>
     </div>
   );
 }
 
-// ─── VISITS PAGE ──────────────────────────────────────────────────────────────
 function VisitsPage({ user, visits }) {
   const isRZ = user.role === "rz";
   const [filterStore, setFilterStore] = useState("all");
@@ -1311,9 +1702,45 @@ function GoatRankingPanel({ title, subtitle, scores, icon }) {
   );
 }
 
-function GoatPage({ user, goatData, onRefresh, refreshing }) {
+function GoatPage({ user, goatData, goatError, lastLoaded, onRefresh, refreshing }) {
   const isRZ = user.role === "rz";
-  const data = goatData || GOAT_DATA_FALLBACK;
+
+  // Pas de données de secours : si Notion n'a pas répondu, on le dit clairement
+  // plutôt que d'afficher un classement périmé qui passerait pour le classement
+  // du jour.
+  if (!goatData) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 900, color: C.navy, display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 22 }}>🐐</span> GOAT — Classement vendeurs
+          </h2>
+        </div>
+        <Card accent={C.bad}>
+          <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+            <span style={{ fontSize: 22 }}>⚠️</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 800, fontSize: 15, color: C.navy, marginBottom: 4 }}>Classement indisponible</div>
+              <p style={{ margin: 0, fontSize: 13, color: C.gray600, lineHeight: 1.65 }}>
+                La lecture de la base GOAT dans Notion n'a pas abouti{goatError ? ` (${goatError})` : ""}.
+                Aucun classement n'est affiché : mieux vaut pas de chiffre qu'un chiffre périmé.
+                {lastLoaded ? ` Dernière tentative ${stampLabel(lastLoaded)}.` : ""}
+              </p>
+              {isRZ && (
+                <div style={{ marginTop: 12 }}>
+                  <Btn size="sm" variant="secondary" onClick={onRefresh} style={{ opacity: refreshing ? 0.6 : 1 }}>
+                    {refreshing ? "⏳ Nouvelle tentative…" : "🔄 Réessayer"}
+                  </Btn>
+                </div>
+              )}
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  const data = goatData;
   const seasonPoints = computeGoatSeasonPoints(data.titlesHistory);
   const goat = seasonPoints[0];
   const streak = computeCurrentStreak(data.titlesHistory);
@@ -1330,6 +1757,7 @@ function GoatPage({ user, goatData, onRefresh, refreshing }) {
           </h2>
           <p style={{ margin: "3px 0 0", fontSize: 12, color: C.gray400 }}>
             Mix produit : Accessoires (25) · GP (25) · Mobileo (30) · ATM (20) — score /100, plafonné par objectif
+            {lastLoaded ? ` · lu dans Notion ${stampLabel(lastLoaded)}` : ""}
           </p>
         </div>
         {isRZ && <Btn size="sm" variant="secondary" onClick={onRefresh} style={{ opacity: refreshing ? 0.6 : 1 }}>{refreshing ? "⏳ Synchro…" : "🔄 Actualiser depuis Notion"}</Btn>}
@@ -1561,32 +1989,65 @@ function GuidePage() {
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function App() {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => api.restore());
   const [page, setPage] = useState("dashboard");
+  const [selectedStore, setSelectedStore] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [results, setResults] = useState(null);
   const [visits, setVisits] = useState(null);
   const [history, setHistory] = useState(null);
   const [goatData, setGoatData] = useState(null);
+  const [goatError, setGoatError] = useState("");
+  const [vendors, setVendors] = useState(null);
+  const [vendorsError, setVendorsError] = useState("");
+  const [actions, setActions] = useState([]);
+  const [lastLoaded, setLastLoaded] = useState(null);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  const [serverState, setServerState] = useState("checking"); // checking | waking | ok | down
+
+  const mois = moisEnCours();
+
+  // ─── Réveil du serveur : on sonde /api/health au démarrage ─────────────────
+  const checkServer = useCallback(async () => {
+    setServerState("checking");
+    const hint = setTimeout(() => setServerState(s => (s === "checking" ? "waking" : s)), WAKE_HINT_MS);
+    try {
+      await pingHealth();
+      setServerState("ok");
+    } catch {
+      setServerState("down");
+    } finally {
+      clearTimeout(hint);
+    }
+  }, []);
+
+  useEffect(() => { checkServer(); }, [checkServer]);
 
   const loadAll = useCallback(async (refresh = false) => {
     if (refresh) setRefreshing(true); else setLoading(true);
-    setError("");
+    setError(""); setGoatError(""); setVendorsError("");
+    const q = refresh ? "?refresh=1" : "";
     try {
-      const [r, v, h, g] = await Promise.all([
-        api.get(`/api/results${refresh ? "?refresh=1" : ""}`),
-        api.get(`/api/visits${refresh  ? "?refresh=1" : ""}`),
-        api.get(`/api/history${refresh ? "?refresh=1" : ""}`).catch(() => ({ months: [], byStore: {} })),
-        api.get(`/api/goat${refresh    ? "?refresh=1" : ""}`).catch(() => null),
+      const [r, v, h, g, vd, ac] = await Promise.all([
+        api.get(`/api/results${q}`),
+        api.get(`/api/visits${q}`),
+        api.get(`/api/history${q}`).catch(() => ({ months: [], byStore: {} })),
+        api.get(`/api/goat${q}`).catch(e => { setGoatError(e.message || "lecture impossible"); return null; }),
+        api.get(`/api/vendors${q}`).catch(e => { setVendorsError(e.message || "endpoint indisponible"); return null; }),
+        api.get(`/api/actions${q}`).catch(() => ({ actions: [] })),
       ]);
       setResults(r);
       setVisits(v.visits);
       setHistory(h);
       setGoatData(g);
+      setVendors(vd?.vendors || null);
+      setActions(ac?.actions || []);
+      setLastLoaded(Date.now());
+      setServerState("ok");
     } catch (e) {
+      if (e.code === "auth") { setUser(null); setError(""); return; }
       setError(e.message);
     } finally {
       setLoading(false); setRefreshing(false);
@@ -1595,104 +2056,102 @@ export default function App() {
 
   useEffect(() => { if (user) loadAll(); }, [user, loadAll]);
 
-  if (!user) return <LoginScreen onLogin={(u) => { setUser(u); setPage("dashboard"); }} />;
+  const signOut = () => {
+    api.logout(); setUser(null);
+    setResults(null); setVisits(null); setHistory(null); setGoatData(null);
+    setVendors(null); setActions([]); setLastLoaded(null);
+  };
+
+  const openStore = (store) => { setSelectedStore(store); setPage("store"); setMenuOpen(false); };
+  const goTo = (id) => { setPage(id); setMenuOpen(false); };
+
+  if (!user) return <LoginScreen serverState={serverState} onRetryPing={checkServer} onLogin={(u) => { setUser(u); setPage("dashboard"); }} />;
 
   const nav = [
-    { id: "dashboard", label: "Vue d'ensemble",     icon: "📊" },
-    { id: "results",   label: "Résultats",           icon: "📈" },
-    { id: "history",   label: "Historique",          icon: "📅" },
-    { id: "goat",      label: "GOAT",                icon: "🐐" },
-    { id: "guide",     label: "Guide Ventes Mobileo", icon: "📘" },
-    { id: "visits",    label: "Visites",             icon: "📋" },
+    { id: "dashboard", label: "Vue d'ensemble" },
+    { id: "results",   label: "Résultats" },
+    { id: "history",   label: "Historique" },
+    { id: "goat",      label: "GOAT" },
+    { id: "guide",     label: "Guide Mobileo" },
+    { id: "visits",    label: "Visites" },
   ];
+  const navActive = page === "store" ? "results" : page;
 
   return (
-    <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'Inter','Segoe UI',system-ui,sans-serif", color: C.text }}>
-      <style>{`
-        * { box-sizing: border-box; }
-        a { text-decoration: none; }
-        .nav-tabs-desktop { display: flex; gap: 2px; flex: 1; }
-        .nav-burger { display: none; }
-        .nav-user-role { display: block; }
-        .nav-mobile-menu { display: none; }
-        @media (max-width: 700px) {
-          .nav-tabs-desktop { display: none !important; }
-          .nav-burger { display: inline-flex !important; }
-          .nav-user-role { display: none !important; }
-          .nav-mobile-menu.open { display: flex !important; }
-          .main-content { padding: 16px 12px !important; }
-        }
-      `}</style>
-
-      {/* NAV */}
-      <nav style={{ background: C.navy, padding: "0 16px", display: "flex", alignItems: "center", height: 54, position: "sticky", top: 0, zIndex: 100, boxShadow: "0 2px 12px rgba(0,0,0,0.25)", gap: 8 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 9, marginRight: 12, flexShrink: 0 }}>
-          <img src={logoRepairMobile} alt="Repair Mobile" style={{ width: 34, height: 34, borderRadius: 7, objectFit: "cover" }} />
-          <div>
-            <div style={{ color: C.white, fontSize: 13, fontWeight: 800, lineHeight: 1 }}>Repair<span style={{ color: C.accentB }}>Mobile</span></div>
-            <div style={{ color: C.accentB, fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase" }}>Pilotage Réseau</div>
-          </div>
+    <>
+      <nav className="nav">
+        <img className="nav-logo" src={logoRepairMobile} alt="Repair Mobile" />
+        <div>
+          <div className="nav-brand">Repair<i>Mobile</i></div>
+          <div className="nav-sub">Pilotage réseau</div>
         </div>
 
-        <div className="nav-tabs-desktop">
-          {nav.map(({ id, label, icon }) => (
-            <button key={id} onClick={() => setPage(id)}
-              style={{ padding: "5px 12px", borderRadius: 7, border: "none", background: page === id ? C.accent : "transparent", color: page === id ? C.white : C.gray400, fontSize: 12, fontWeight: page === id ? 700 : 400, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit" }}>
-              {icon} {label}
-            </button>
+        <div className="nav-links">
+          {nav.map(({ id, label }) => (
+            <button key={id} className={navActive === id ? "on" : ""} onClick={() => goTo(id)}>{label}</button>
           ))}
         </div>
 
-        <div style={{ flex: 1 }} />
-
-        <div className="nav-user-role" style={{ textAlign: "right", flexShrink: 0 }}>
-          <div style={{ color: C.white, fontSize: 11, fontWeight: 600 }}>{user.name}</div>
-          <div style={{ color: C.accentB, fontSize: 9, textTransform: "uppercase", letterSpacing: "0.06em" }}>{user.role === "rz" ? "Resp. de Zone" : "Magasin"}</div>
+        <div className="nav-right">
+          <div className="nav-stamp">
+            <i style={{ background: serverState === "down" ? C.bad : (loading || refreshing) ? C.warn : C.ok }} />
+            {(loading || refreshing) ? "Lecture Notion…" : lastLoaded ? `Données ${stampLabel(lastLoaded)}` : "—"}
+          </div>
+          <div className="nav-user">
+            <b>{user.name}</b>
+            <span>{user.role === "rz" ? "Resp. de zone" : "Magasin"}</span>
+          </div>
+          <button className="nav-icon" onClick={signOut} title="Se déconnecter">⏻</button>
+          <button className="nav-burger" onClick={() => setMenuOpen(o => !o)} aria-label="Menu">{menuOpen ? "✕" : "☰"}</button>
         </div>
-
-        <button onClick={() => { api.token = null; setUser(null); }} style={{ padding: "4px 9px", borderRadius: 6, border: `1px solid ${C.navyL}`, background: "transparent", color: C.gray400, fontSize: 13, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>⏏</button>
-
-        <button className="nav-burger" onClick={() => setMenuOpen(o => !o)}
-          style={{ alignItems: "center", justifyContent: "center", width: 38, height: 34, borderRadius: 7, border: `1px solid ${C.navyL}`, background: menuOpen ? C.accent : "transparent", color: C.white, fontSize: 18, cursor: "pointer", fontFamily: "inherit", flexShrink: 0, padding: 0 }}>
-          {menuOpen ? "✕" : "☰"}
-        </button>
       </nav>
 
-      {/* Menu mobile déroulant */}
-      <div className={`nav-mobile-menu${menuOpen ? " open" : ""}`}
-        style={{ flexDirection: "column", background: C.navyMid, position: "sticky", top: 54, zIndex: 99, boxShadow: "0 4px 12px rgba(0,0,0,0.25)", padding: "8px" }}>
-        <div style={{ padding: "8px 12px", borderBottom: `1px solid ${C.navyL}`, marginBottom: 6 }}>
-          <div style={{ color: C.white, fontSize: 13, fontWeight: 700 }}>{user.name}</div>
-          <div style={{ color: C.accentB, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.06em" }}>{user.role === "rz" ? "Responsable de Zone" : "Magasin"}</div>
+      <div className={`nav-mobile${menuOpen ? " open" : ""}`}>
+        <div style={{ padding: "8px 14px 12px", borderBottom: "1px solid rgba(255,255,255,.1)", marginBottom: 6 }}>
+          <div style={{ color: "#fff", fontSize: 13.5, fontWeight: 700 }}>{user.name}</div>
+          <div style={{ color: C.accentB, fontSize: 10, textTransform: "uppercase", letterSpacing: ".06em" }}>
+            {user.role === "rz" ? "Responsable de zone" : "Magasin"}
+          </div>
+          <div style={{ color: "rgba(255,255,255,.45)", fontSize: 11, marginTop: 4 }}>
+            {lastLoaded ? `Données ${stampLabel(lastLoaded)}` : "—"}
+          </div>
         </div>
-        {nav.map(({ id, label, icon }) => (
-          <button key={id} onClick={() => { setPage(id); setMenuOpen(false); }}
-            style={{ textAlign: "left", padding: "11px 14px", borderRadius: 8, border: "none", background: page === id ? C.accent : "transparent", color: page === id ? C.white : C.gray200, fontSize: 14, fontWeight: page === id ? 700 : 500, cursor: "pointer", fontFamily: "inherit", marginBottom: 2 }}>
-            {icon}  {label}
-          </button>
+        {nav.map(({ id, label }) => (
+          <button key={id} className={navActive === id ? "on" : ""} onClick={() => goTo(id)}>{label}</button>
         ))}
       </div>
 
-      {/* MAIN */}
-      <main className="main-content" style={{ maxWidth: 1100, margin: "0 auto", padding: "22px 18px" }}>
+      <main>
         {page === "guide" ? (
           <GuidePage />
         ) : (
           <>
+            {serverState !== "ok" && (
+              <div style={{ marginBottom: 16 }}><WakeBanner state={serverState} onRetry={checkServer} /></div>
+            )}
             {error && <div style={{ marginBottom: 16 }}><ErrorBanner message={error} onRetry={() => loadAll()} /></div>}
-            {loading ? <Spinner label="Lecture des données Notion…" /> : (
+            {loading ? (
+              <Spinner label={serverState === "waking" ? "Réveil du serveur, patiente une minute…" : "Lecture des données Notion…"} />
+            ) : (
               <>
-                {page === "dashboard" && results && <Dashboard user={user} data={results} />}
-                {page === "results"   && results && <ResultsPage user={user} data={results} onRefresh={() => loadAll(true)} refreshing={refreshing} />}
-                {page === "history"   && <HistoryPage user={user} history={history} />}
-                {page === "goat"      && <GoatPage user={user} goatData={goatData} onRefresh={() => loadAll(true)} refreshing={refreshing} />}
-                {page === "visits"    && <VisitsPage user={user} visits={visits} />}
+                {page === "dashboard" && results && <Dashboard user={user} data={results} onOpenStore={openStore} />}
+                {page === "results" && results && (
+                  <ResultsPage user={user} data={results} vendors={vendors} vendorsError={vendorsError} mois={mois}
+                    onRefresh={() => loadAll(true)} refreshing={refreshing} onOpenStore={openStore} />
+                )}
+                {page === "store" && results && selectedStore && (
+                  <StorePage user={user} store={selectedStore} data={results} vendors={vendors} actions={actions}
+                    mois={mois} onBack={() => setPage("dashboard")} />
+                )}
+                {page === "history" && <HistoryPage user={user} history={history} />}
+                {page === "goat"    && <GoatPage user={user} goatData={goatData} goatError={goatError} lastLoaded={lastLoaded} onRefresh={() => loadAll(true)} refreshing={refreshing} />}
+                {page === "visits"  && <VisitsPage user={user} visits={visits} />}
                 {!results && !error && <Spinner />}
               </>
             )}
           </>
         )}
       </main>
-    </div>
+    </>
   );
 }
