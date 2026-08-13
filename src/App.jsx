@@ -193,6 +193,374 @@ const api = {
   },
 };
 
+// __STYLES_START__
+const STYLES = `
+/* ══════════════════════════════════════════════════════════════════════════
+   SAVE Pilotage — feuille de style
+   Charte Repair Mobile conservée. Les couleurs de statut ont été révisées
+   pour ne plus être confondues avec l'orange de marque : séparation validée
+   par calcul, y compris en vision daltonienne.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+:root{
+  /* Marque */
+  --brand:#E8612C; --brand-light:#FF8A50; --brand-wash:#FDEEE7;
+  --ink:#2B2B2B; --ink-2:#363636; --ink-3:#4A4A4A;
+  --cream:#F7F5F3; --surface:#FFFFFF;
+  --line:#EAE5E0; --line-2:#F2EEEA;
+  --muted:#8A847E; --sub:#5A544E;
+
+  /* Statuts */
+  --ok:#2E7D53;      --ok-wash:#EAF3EE;
+  --warn:#B4881B;    --warn-wash:#F8F1DF;
+  --bad:#A02724;     --bad-wash:#F7EAE9;
+  --neutral:#8A847E; --neutral-wash:#F0EDEA;
+
+  --r:14px; --r-sm:10px;
+  --shadow:0 1px 2px rgba(43,43,43,.04), 0 6px 20px rgba(43,43,43,.06);
+  --shadow-lift:0 2px 4px rgba(43,43,43,.05), 0 12px 28px rgba(43,43,43,.10);
+}
+
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--cream); color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased;
+}
+a{text-decoration:none}
+button{font-family:inherit}
+:focus-visible{outline:2px solid var(--brand); outline-offset:2px; border-radius:6px}
+
+/* ─── Typographie ───────────────────────────────────────────────────────── */
+.h-screen{font-size:22px;font-weight:700;margin:0;letter-spacing:-.01em}
+.h-section{font-size:15px;font-weight:700;margin:0 0 14px}
+.lbl{font-size:11.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.meta{font-size:12.5px;color:var(--muted)}
+.ctx{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:22px}
+.ctx p{margin:0;font-size:12.5px;color:var(--muted)}
+.stack{display:flex;flex-direction:column;gap:18px}
+.sec{margin-bottom:30px}
+
+/* ─── Barre de navigation ───────────────────────────────────────────────── */
+.nav{background:var(--ink);padding:0 20px;height:58px;display:flex;align-items:center;gap:10px;
+  position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,.22)}
+.nav-logo{width:34px;height:34px;border-radius:9px;object-fit:cover;flex-shrink:0}
+.nav-brand{color:#fff;font-size:13.5px;font-weight:700;line-height:1.15}
+.nav-brand i{color:var(--brand-light);font-style:normal}
+.nav-sub{color:rgba(255,255,255,.45);font-size:9.5px;letter-spacing:.11em;text-transform:uppercase}
+.nav-links{display:flex;gap:2px;margin-left:20px}
+.nav-links button{color:rgba(255,255,255,.6);font-size:12.5px;font-weight:500;padding:7px 13px;
+  border-radius:8px;border:none;background:transparent;cursor:pointer;white-space:nowrap}
+.nav-links button:hover{color:#fff;background:rgba(255,255,255,.06)}
+.nav-links button.on{background:rgba(255,255,255,.11);color:#fff;font-weight:600}
+.nav-right{margin-left:auto;display:flex;align-items:center;gap:14px;flex-shrink:0}
+.nav-stamp{display:flex;align-items:center;gap:7px;font-size:11.5px;color:rgba(255,255,255,.55);white-space:nowrap}
+.nav-stamp i{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.nav-user{text-align:right}
+.nav-user b{display:block;color:#fff;font-size:11.5px;font-weight:600}
+.nav-user span{color:var(--brand-light);font-size:9px;text-transform:uppercase;letter-spacing:.06em}
+.nav-icon{padding:5px 10px;border-radius:7px;border:1px solid rgba(255,255,255,.16);background:transparent;
+  color:rgba(255,255,255,.65);font-size:13px;cursor:pointer}
+.nav-burger{display:none;align-items:center;justify-content:center;width:38px;height:34px;border-radius:8px;
+  border:1px solid rgba(255,255,255,.16);background:transparent;color:#fff;font-size:17px;cursor:pointer;padding:0}
+.nav-mobile{display:none;flex-direction:column;background:var(--ink-2);position:sticky;top:58px;z-index:99;
+  padding:8px;box-shadow:0 6px 16px rgba(0,0,0,.25)}
+.nav-mobile.open{display:flex}
+.nav-mobile button{text-align:left;padding:12px 14px;border-radius:9px;border:none;background:transparent;
+  color:rgba(255,255,255,.75);font-size:14.5px;font-weight:500;cursor:pointer;margin-bottom:2px}
+.nav-mobile button.on{background:var(--brand);color:#fff;font-weight:600}
+
+main{max-width:1200px;margin:0 auto;padding:28px 20px 64px}
+
+/* ─── Cartes ────────────────────────────────────────────────────────────── */
+.card{background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);padding:20px 22px}
+.card.pad-0{padding:0}
+.card.accent-brand{border-left:3px solid var(--brand)}
+.card.accent-bad{border-left:3px solid var(--bad)}
+.grid{display:grid;gap:14px}
+.grid-3{grid-template-columns:repeat(3,1fr)}
+.grid-auto{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.grid-stores{grid-template-columns:repeat(auto-fit,minmax(216px,1fr))}
+
+/* ─── Tuiles KPI ────────────────────────────────────────────────────────── */
+.tile{background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);padding:16px 18px 18px}
+.tile .lbl{font-size:11px}
+.tile .val{font-size:29px;font-weight:750;letter-spacing:-.025em;margin:8px 0 2px;line-height:1}
+.tile .val small{font-size:15px;font-weight:600;color:var(--muted);letter-spacing:0}
+.tile .foot{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;min-height:18px;flex-wrap:wrap}
+.tile .foot b{color:var(--ink);font-weight:650}
+.tile.hero .val{font-size:40px}
+
+/* ─── Jauge ─────────────────────────────────────────────────────────────── */
+.meter{position:relative;height:6px;border-radius:3px;background:var(--line-2);margin:11px 0 9px}
+.meter i{position:absolute;left:0;top:0;height:100%;border-radius:3px;display:block;transition:width .5s ease}
+.meter u{position:absolute;top:-3px;width:2px;height:12px;background:var(--ink);opacity:.22;border-radius:1px}
+.meter.flat{margin:0}
+.fill-ok{background:var(--ok)} .fill-warn{background:var(--warn)}
+.fill-bad{background:var(--bad)} .fill-neutral{background:var(--neutral)}
+
+/* ─── Pastilles ─────────────────────────────────────────────────────────── */
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:650;
+  padding:3px 9px;border-radius:20px;white-space:nowrap}
+.chip::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0}
+.chip.no-dot::before{display:none}
+.c-ok{background:var(--ok-wash);color:var(--ok)}
+.c-warn{background:var(--warn-wash);color:var(--warn)}
+.c-bad{background:var(--bad-wash);color:var(--bad)}
+.c-neutral{background:var(--neutral-wash);color:var(--sub)}
+.c-brand{background:var(--brand-wash);color:var(--brand)}
+.trend{font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:3px}
+.t-up{color:var(--ok)} .t-down{color:var(--bad)} .t-flat{color:var(--muted)}
+.txt-ok{color:var(--ok)} .txt-warn{color:var(--warn)} .txt-bad{color:var(--bad)} .txt-muted{color:var(--muted)}
+
+/* ─── Boutons ───────────────────────────────────────────────────────────── */
+.btn{cursor:pointer;border:none;border-radius:9px;font-weight:600;display:inline-flex;align-items:center;
+  gap:6px;padding:8px 15px;font-size:13px;transition:filter .15s}
+.btn:hover{filter:brightness(.95)}
+.btn-primary{background:var(--brand);color:#fff}
+.btn-secondary{background:var(--line-2);color:var(--ink)}
+.btn-ink{background:var(--ink);color:#fff}
+.btn-ghost{background:transparent;color:var(--sub);border:1px solid var(--line)}
+.btn-sm{padding:6px 12px;font-size:12px}
+.btn-lg{padding:11px 22px;font-size:14px}
+.btn[disabled]{opacity:.55;cursor:default}
+
+/* ─── Sous-onglets ──────────────────────────────────────────────────────── */
+.seg{display:inline-flex;background:var(--line-2);border-radius:11px;padding:3px;gap:3px;flex-wrap:wrap}
+.seg button{border:none;background:transparent;font-size:13px;font-weight:600;color:var(--sub);
+  padding:7px 16px;border-radius:8px;cursor:pointer}
+.seg button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(43,43,43,.10)}
+
+/* ─── Champs ────────────────────────────────────────────────────────────── */
+.select,.input{border:1.5px solid var(--line);border-radius:9px;padding:8px 12px;font-size:13px;
+  font-family:inherit;color:var(--ink);background:var(--surface);cursor:pointer}
+.input{cursor:text;width:100%}
+.field-label{font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;
+  letter-spacing:.06em;display:block;margin-bottom:5px}
+
+/* ─── Tableaux ──────────────────────────────────────────────────────────── */
+.tbl-wrap{overflow-x:auto}
+table.tbl{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+table.tbl th{text-align:left;font-size:11px;font-weight:650;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--muted);padding:0 12px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+table.tbl td{padding:13px 12px;border-bottom:1px solid var(--line-2);font-size:14px}
+table.tbl tr:last-child td{border-bottom:none}
+table.tbl .r{text-align:right} table.tbl .c{text-align:center}
+table.tbl td.name{font-weight:650}
+table.tbl td .cell-sub{font-size:11.5px;color:var(--muted);font-weight:400;margin-top:1px}
+table.tbl tr.dim td{background:var(--neutral-wash);color:var(--muted)}
+table.tbl tr.clickable{cursor:pointer}
+table.tbl tr.clickable:hover td{background:var(--brand-wash)}
+.big{font-size:16px;font-weight:750;letter-spacing:-.01em}
+.note{font-size:12.5px;color:var(--muted);margin:12px 0 0;line-height:1.6}
+
+/* ─── Cartes magasin ────────────────────────────────────────────────────── */
+.store{background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);padding:18px 20px;
+  cursor:pointer;transition:box-shadow .18s, transform .18s;border-top:3px solid transparent;
+  text-align:left;border-left:none;border-right:none;border-bottom:none;width:100%;font:inherit;color:inherit}
+.store:hover{transform:translateY(-2px);box-shadow:var(--shadow-lift)}
+.store.s-ok{border-top-color:var(--ok)} .store.s-warn{border-top-color:var(--warn)} .store.s-bad{border-top-color:var(--bad)}
+.store h3{margin:0;font-size:15.5px;font-weight:700}
+.store .team{font-size:11.5px;color:var(--muted);margin:2px 0 12px}
+.store .marge{font-size:22px;font-weight:750;letter-spacing:-.02em}
+.store .marge-lbl{font-size:11px;color:var(--muted);margin-bottom:14px}
+.kpiline{display:flex;align-items:center;gap:9px;margin-bottom:8px}
+.kpiline>span:first-child{font-size:11.5px;color:var(--muted);width:38px;flex-shrink:0}
+.kpiline .bar{flex:1;height:5px;border-radius:3px;background:var(--line-2);position:relative}
+.kpiline .bar i{position:absolute;left:0;top:0;height:100%;border-radius:3px}
+.kpiline .bar u{position:absolute;top:-2.5px;width:1.5px;height:10px;background:var(--ink);opacity:.2}
+.kpiline b{font-size:12.5px;font-weight:700;width:46px;text-align:right;font-variant-numeric:tabular-nums}
+.store .score{font-size:11.5px;font-weight:650;margin-top:12px;padding-top:11px;border-top:1px solid var(--line-2);
+  display:flex;justify-content:space-between;align-items:center;gap:8px}
+
+/* ─── Priorités ────────────────────────────────────────────────────────── */
+.prio-item{display:flex;gap:16px;align-items:flex-start;padding:15px 22px;border-top:1px solid var(--line-2)}
+.prio-item:first-of-type{border-top:none}
+.prio-rank{width:24px;height:24px;border-radius:7px;background:var(--brand-wash);color:var(--brand);
+  font-weight:800;font-size:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.prio-txt{flex:1;min-width:0}
+.prio-txt b{font-weight:650;font-size:14.5px}
+.prio-txt p{margin:3px 0 0;font-size:13px;color:var(--sub);line-height:1.6}
+.prio-num{text-align:right;flex-shrink:0}
+.prio-num .v{font-size:20px;font-weight:750;letter-spacing:-.02em}
+.prio-num .o{font-size:11.5px;color:var(--muted)}
+
+/* ─── Commentaire RZ ───────────────────────────────────────────────────── */
+.quote{background:var(--brand-wash);border-radius:var(--r);padding:18px 22px;border-left:3px solid var(--brand)}
+.quote p{margin:8px 0 0;font-size:14.5px;line-height:1.65;white-space:pre-wrap}
+
+/* ─── Plan d'action ────────────────────────────────────────────────────── */
+.action{display:flex;gap:14px;align-items:flex-start;padding:14px 0;border-top:1px solid var(--line-2)}
+.action:first-of-type{border-top:none}
+.action .check{width:19px;height:19px;border-radius:6px;border:1.5px solid var(--line);flex-shrink:0;margin-top:2px}
+.action .check.done{background:var(--ok);border-color:var(--ok)}
+.action .check.doing{border-color:var(--warn);background:var(--warn-wash)}
+.action .body{flex:1;min-width:0}
+.action .body b{font-weight:600;font-size:14px}
+.action.is-done .body b{color:var(--muted);text-decoration:line-through}
+.action .body p{margin:3px 0 0;font-size:12px;color:var(--muted)}
+.action .side{display:flex;gap:8px;align-items:center;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
+
+/* ─── États ────────────────────────────────────────────────────────────── */
+.empty{text-align:center;padding:30px 10px;color:var(--muted);font-size:13px}
+.spin{width:30px;height:30px;border:3px solid var(--line-2);border-top-color:var(--brand);border-radius:50%;
+  animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+/* ─── Cartes mobiles (remplacent les tableaux) ─────────────────────────── */
+.mcards{display:none}
+.mcard{background:var(--surface);border-radius:12px;box-shadow:var(--shadow);padding:15px 16px;margin-bottom:11px}
+.mcard .top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:12px}
+.mcard h4{margin:0;font-size:14.5px;font-weight:700}
+.mrow{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:7px 0;
+  border-top:1px solid var(--line-2);font-size:13px}
+.mrow:first-of-type{border-top:none}
+.mrow span{color:var(--muted);font-size:12.5px}
+.mrow b{font-weight:700;font-variant-numeric:tabular-nums}
+
+@media(max-width:900px){ .grid-3{grid-template-columns:repeat(2,1fr)} }
+@media(max-width:768px){
+  .nav-links,.nav-user,.nav-stamp{display:none}
+  .nav-burger{display:inline-flex}
+  main{padding:18px 13px 56px}
+  .grid-3{grid-template-columns:1fr}
+  .card{padding:17px 16px}
+  .prio-item{padding:14px 16px;flex-wrap:wrap}
+  .tbl-wrap{display:none}
+  .mcards{display:block}
+  .h-screen{font-size:20px}
+}
+@media(prefers-reduced-motion:reduce){ *{animation:none!important;transition:none!important} }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   GOAT — trois colonnes : saison · mois · semaine
+   ══════════════════════════════════════════════════════════════════════════ */
+.goat-cols{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;align-items:start}
+.goat-card{background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden;
+  border-top:3px solid transparent;animation:rise .45s cubic-bezier(.2,.9,.3,1) both}
+.goat-card.k-saison{border-top-color:#D4A017}
+.goat-card.k-mois{border-top-color:var(--brand)}
+.goat-card.k-semaine{border-top-color:#3E6FB0}
+@keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+
+.goat-head{padding:15px 17px 16px;color:#fff;position:relative;overflow:hidden}
+.goat-head::after{content:"";position:absolute;right:-26px;top:-26px;width:96px;height:96px;border-radius:50%;
+  background:rgba(255,255,255,.07)}
+.k-saison .goat-head{background:radial-gradient(circle at 88% 8%,rgba(244,180,0,.42),transparent 62%),
+  linear-gradient(135deg,#2B2B2B,#3E3527)}
+.k-mois .goat-head{background:linear-gradient(135deg,#C2481B,#E8612C 65%,#FF8A50)}
+.k-semaine .goat-head{background:linear-gradient(135deg,#2C4A70,#3E6FB0)}
+.goat-head .k{font-size:10px;letter-spacing:.13em;text-transform:uppercase;font-weight:800;color:rgba(255,255,255,.7)}
+.goat-head h3{margin:4px 0 0;font-size:16px;font-weight:800;color:#fff;letter-spacing:-.01em;
+  display:flex;align-items:center;gap:8px}
+.goat-head .p{margin:3px 0 0;font-size:11.5px;color:rgba(255,255,255,.72)}
+
+.goat-hero{display:flex;align-items:center;gap:13px;padding:15px 17px;
+  background:linear-gradient(120deg,#FFF9EC,#FDF1E4);border-bottom:1px solid var(--line-2)}
+.goat-hero .badge{width:50px;height:50px;border-radius:50%;flex-shrink:0;font-size:25px;
+  background:linear-gradient(145deg,#FFD34E,#D4A017 55%,#A8760A);
+  display:flex;align-items:center;justify-content:center;box-shadow:0 5px 16px rgba(212,160,23,.45)}
+.goat-hero .who{flex:1;min-width:0}
+.goat-hero .who b{display:block;font-size:18px;font-weight:850;letter-spacing:-.02em}
+.goat-hero .who>span{font-size:11.5px;color:var(--muted)}
+.goat-hero .pts{text-align:right;flex-shrink:0}
+.goat-hero .pts b{display:block;font-size:26px;font-weight:850;line-height:1;color:#B8860B}
+.goat-hero .pts span{font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700}
+.goat-tags{margin-top:5px;display:flex;gap:6px;flex-wrap:wrap}
+.goat-tag{font-size:10.5px;font-weight:750;padding:2px 8px;border-radius:20px;white-space:nowrap}
+.tag-gold{background:#FBEFCE;color:#8A6400} .tag-brand{background:var(--brand-wash);color:#C2481B}
+.tag-fire{background:#FDE4DE;color:#B33A22}
+
+.goat-row{display:flex;align-items:center;gap:11px;padding:11px 15px;border-top:1px solid var(--line-2);
+  transition:background .15s}
+.goat-row:hover{background:#FCFAF8}
+.goat-row.lead{background:linear-gradient(90deg,rgba(244,180,0,.16),rgba(244,180,0,.02))}
+.goat-row.lead:hover{background:linear-gradient(90deg,rgba(244,180,0,.22),rgba(244,180,0,.04))}
+.goat-row.zero{opacity:.5}
+.goat-row .rk{width:25px;height:25px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;
+  justify-content:center;font-size:11.5px;font-weight:850;background:var(--line-2);color:var(--muted)}
+.goat-row .rk.m1{background:linear-gradient(145deg,#FFD34E,#C98A00);color:#fff;box-shadow:0 2px 7px rgba(201,138,0,.45)}
+.goat-row .rk.m2{background:linear-gradient(145deg,#DDE1E6,#9AA0A8);color:#fff}
+.goat-row .rk.m3{background:linear-gradient(145deg,#E2A76B,#B06A28);color:#fff}
+.goat-row .who{flex:1;min-width:0}
+.goat-row .who b{font-size:13.5px;font-weight:750;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.goat-row .who>span{font-size:11px;color:var(--muted)}
+.goat-row .sc{font-size:16px;font-weight:850;font-variant-numeric:tabular-nums;flex-shrink:0;letter-spacing:-.02em}
+.goat-row .sc small{font-size:9.5px;color:var(--muted);font-weight:650}
+.goat-solo{font-size:8.5px;font-weight:800;color:#fff;background:var(--brand);
+  padding:1px 6px;border-radius:8px;margin-left:6px;vertical-align:1.5px;letter-spacing:.03em}
+
+/* Composition du score — barre empilée, une teinte du clair au foncé */
+.stackbar{display:flex;gap:2px;height:6px;margin-top:6px}
+.stackbar i{display:block;border-radius:2px;min-width:2px;animation:grow .55s cubic-bezier(.2,.9,.3,1) both;transform-origin:left}
+@keyframes grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+.sg1{background:#F9D2B6} .sg2{background:#F0A170} .sg3{background:#E8612C} .sg4{background:#9E3610}
+.goat-legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--sub);align-items:center;
+  background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);padding:12px 18px}
+.goat-legend span{display:inline-flex;align-items:center;gap:6px}
+.goat-legend i{width:11px;height:11px;border-radius:3px;display:inline-block}
+
+/* Historique repliable sous chaque colonne */
+.hist{border-top:1px solid var(--line);background:#FCFAF8}
+.hist summary{list-style:none;cursor:pointer;padding:12px 15px;font-size:12.5px;font-weight:700;color:var(--sub);
+  display:flex;align-items:center;gap:8px;transition:background .15s}
+.hist summary::-webkit-details-marker{display:none}
+.hist summary::after{content:"▾";margin-left:auto;color:var(--brand);font-size:13px;transition:transform .25s ease}
+.hist[open] summary::after{transform:rotate(180deg)}
+.hist summary:hover{background:var(--brand-wash);color:var(--brand)}
+.hist-body{padding:2px 15px 14px;max-height:280px;overflow-y:auto}
+.hist-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 0;
+  border-top:1px solid var(--line-2);font-size:12px}
+.hist-row:first-child{border-top:none}
+.hist-row .who{font-weight:700}
+.hist-row .per{color:var(--muted)}
+.hist-row .sc{font-weight:750;color:#B8860B;font-variant-numeric:tabular-nums}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Accordéon — Guide Ventes Mobileo
+   ══════════════════════════════════════════════════════════════════════════ */
+.acc{border-top:1px solid var(--line-2);border-left:3px solid transparent;transition:border-color .25s,background .2s}
+.acc:first-child{border-top:none}
+.acc.open{border-left-color:var(--acc-c,var(--brand));background:#FDFCFB}
+.acc-head{display:flex;align-items:center;gap:14px;width:100%;padding:15px 20px;background:none;border:none;
+  cursor:pointer;text-align:left;font:inherit;transition:background .15s}
+.acc-head:hover{background:var(--line-2)}
+.acc-ico{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;
+  font-size:17px;flex-shrink:0;background:var(--acc-wash,var(--brand-wash));transition:transform .25s ease}
+.acc.open .acc-ico{transform:scale(1.06)}
+.acc-title{flex:1;min-width:0}
+.acc-title b{display:block;font-size:15px;font-weight:700;letter-spacing:-.01em}
+.acc-title span{font-size:11.5px;color:var(--muted)}
+.acc-num{font-size:11px;font-weight:800;color:var(--acc-c,var(--brand));background:var(--acc-wash,var(--brand-wash));
+  border-radius:20px;padding:2px 9px;flex-shrink:0}
+.acc-chev{color:var(--muted);font-size:11px;transition:transform .3s cubic-bezier(.4,0,.2,1);flex-shrink:0}
+.acc.open .acc-chev{transform:rotate(90deg);color:var(--acc-c,var(--brand))}
+.acc-body{display:grid;grid-template-rows:0fr;transition:grid-template-rows .32s cubic-bezier(.4,0,.2,1)}
+.acc.open .acc-body{grid-template-rows:1fr}
+.acc-body>.acc-inner{overflow:hidden}
+.acc-body>.acc-inner>div{padding:2px 20px 20px 68px;opacity:0;transition:opacity .3s ease .06s}
+.acc.open .acc-body>.acc-inner>div{opacity:1}
+.guide-row{display:flex;gap:16px;padding:10px 0;border-bottom:1px solid var(--line-2)}
+.guide-row:last-child{border-bottom:none}
+.guide-row .k{min-width:170px;flex-shrink:0;font-size:13px;font-weight:700;color:var(--acc-c,var(--ink))}
+.guide-row .v{font-size:13.5px;color:var(--sub);line-height:1.6}
+.guide-block{padding:11px 14px;background:var(--surface);border-radius:10px;margin-bottom:7px;
+  border-left:3px solid var(--acc-c,var(--brand));box-shadow:0 1px 3px rgba(43,43,43,.05)}
+.guide-block b{display:block;font-size:13.5px;font-weight:700;margin-bottom:3px}
+.guide-block span{font-size:13px;color:var(--sub);line-height:1.55}
+
+@media(max-width:1000px){ .goat-cols{grid-template-columns:1fr} }
+@media(max-width:768px){
+  .acc-head{padding:13px 14px;gap:11px}
+  .acc-body>.acc-inner>div{padding:2px 14px 16px}
+  .guide-row{flex-direction:column;gap:3px}
+  .guide-row .k{min-width:0}
+}
+`;
+// __STYLES_END__
+
 // ─── UI PRIMITIVES ─────────────────────────────────────────────────────────────
 function Card({ children, style = {}, accent, className = "" }) {
   const cls = ["card", accent === C.bad ? "accent-bad" : accent ? "accent-brand" : "", className].filter(Boolean).join(" ");
@@ -1604,17 +1972,18 @@ function GoatStack({ breakdown }) {
 }
 
 function GoatRow({ rank, name, store, score, isSolo, breakdown, suffix }) {
+  const zero = typeof score === "number" && score <= 0;
   return (
-    <div className={`goat-row${rank === 1 ? " lead" : ""}`}>
-      <div className={`rk${rank <= 3 ? ` m${rank}` : ""}`}>{rank}</div>
+    <div className={`goat-row${rank === 1 && !zero ? " lead" : ""}${zero ? " zero" : ""}`}>
+      <div className={`rk${rank <= 3 && !zero ? ` m${rank}` : ""}`}>{rank}</div>
       <div className="who">
         <b>{name}{isSolo && <span className="goat-solo">SOLO</span>}</b>
         <span>{store}</span>
         {breakdown && <GoatStack breakdown={breakdown} />}
       </div>
-      <div className="sc" style={{ color: rank === 1 ? "#B8860B" : "var(--ink)" }}>
+      <div className="sc" style={{ color: rank === 1 && !zero ? "#B8860B" : "var(--ink)" }}>
         {typeof score === "number" ? score.toLocaleString("fr-FR", { maximumFractionDigits: 1 }) : score}
-        {suffix && <span style={{ fontSize: 10, color: "var(--muted)", fontWeight: 600 }}> {suffix}</span>}
+        {suffix && <small> {suffix}</small>}
       </div>
     </div>
   );
@@ -1629,7 +1998,10 @@ function GoatHistory({ label, entries }) {
         {entries.map((t, i) => (
           <div className="hist-row" key={i}>
             <span className="per">{t.label}</span>
-            <span><span className="who">{t.winner}</span>{t.score != null && <span className="per"> · {t.score}</span>}</span>
+            <span style={{ display: "flex", gap: 9, alignItems: "baseline" }}>
+              <span className="who">{t.winner}</span>
+              {t.score != null && <span className="sc">{t.score}</span>}
+            </span>
           </div>
         ))}
       </div>
@@ -1637,12 +2009,12 @@ function GoatHistory({ label, entries }) {
   );
 }
 
-function GoatColumn({ kicker, title, subtitle, hero, rows, history, historyLabel, emptyLabel }) {
+function GoatColumn({ variant, icon, kicker, title, subtitle, hero, rows, history, historyLabel, emptyLabel }) {
   return (
-    <div className="goat-card">
+    <div className={`goat-card k-${variant}`}>
       <div className="goat-head">
         <div className="k">{kicker}</div>
-        <h3>{title}</h3>
+        <h3>{icon} {title}</h3>
         {subtitle && <p className="p">{subtitle}</p>}
       </div>
       {hero}
@@ -1718,6 +2090,7 @@ function GoatPage({ user, goatData, goatError, lastLoaded, onRefresh, refreshing
       <div className="goat-cols">
         {/* ── Colonne 1 : la saison écoulée ── */}
         <GoatColumn
+          variant="saison" icon="🐐"
           kicker="Saison écoulée"
           title="GOAT de la saison"
           subtitle="1 point par MVP de la semaine · 3 points par MVP du mois"
@@ -1727,10 +2100,10 @@ function GoatPage({ user, goatData, goatError, lastLoaded, onRefresh, refreshing
               <div className="who">
                 <b>{goat.name}</b>
                 <span>{goat.store}</span>
-                <div style={{ marginTop: 4, display: "flex", gap: 9, flexWrap: "wrap", fontSize: 11, fontWeight: 700 }}>
-                  {goat.months > 0 && <span style={{ color: "#B8860B" }}>🏆 {goat.months} mois</span>}
-                  {goat.weeks > 0 && <span style={{ color: C.accent }}>⭐ {goat.weeks} sem.</span>}
-                  {showStreak && <span style={{ color: "#C0392B" }}>🔥 {streak.count} d'affilée</span>}
+                <div className="goat-tags">
+                  {goat.months > 0 && <span className="goat-tag tag-gold">🏆 {goat.months} mois</span>}
+                  {goat.weeks > 0 && <span className="goat-tag tag-brand">⭐ {goat.weeks} semaines</span>}
+                  {showStreak && <span className="goat-tag tag-fire">🔥 {streak.count} d'affilée</span>}
                 </div>
               </div>
               <div className="pts"><b>{goat.points}</b><span>points</span></div>
@@ -1746,6 +2119,7 @@ function GoatPage({ user, goatData, goatError, lastLoaded, onRefresh, refreshing
 
         {/* ── Colonne 2 : le mois ── */}
         <GoatColumn
+          variant="mois" icon="🏆"
           kicker="Mois"
           title="MVP du mois"
           subtitle={data.monthly?.label || "Période non renseignée"}
@@ -1760,6 +2134,7 @@ function GoatPage({ user, goatData, goatError, lastLoaded, onRefresh, refreshing
 
         {/* ── Colonne 3 : la semaine ── */}
         <GoatColumn
+          variant="semaine" icon="⭐"
           kicker="Semaine"
           title="MVP de la semaine"
           subtitle={data.weekly?.label || "Période non renseignée"}
@@ -1789,7 +2164,19 @@ function GoatPage({ user, goatData, goatError, lastLoaded, onRefresh, refreshing
   );
 }
 
-const GUIDE_IDS = ["adn", "trame", "questions", "operateurs", "closing", "obj1", "obj2", "memo"];
+// Les 8 rubriques du guide : icône et couleur d'accent, purement décoratives —
+// elles servent de repère visuel pour retrouver une rubrique d'un coup d'œil.
+const GUIDE_META = [
+  { id: "adn",        icon: "🎯", c: "#E8612C", wash: "#FDEEE7" },
+  { id: "trame",      icon: "🧭", c: "#C98A00", wash: "#FBF0D8" },
+  { id: "questions",  icon: "❓", c: "#2E7D6B", wash: "#E6F2EF" },
+  { id: "operateurs", icon: "📡", c: "#3E6FB0", wash: "#E8EEF7" },
+  { id: "closing",    icon: "🤝", c: "#2E7D53", wash: "#EAF3EE" },
+  { id: "obj1",       icon: "💬", c: "#A02724", wash: "#F7EAE9" },
+  { id: "obj2",       icon: "🧠", c: "#7A5AA6", wash: "#F0EBF7" },
+  { id: "memo",       icon: "📌", c: "#4A4A4A", wash: "#F0EDEA" },
+];
+const GUIDE_IDS = GUIDE_META.map(g => g.id);
 
 // ─── GUIDE VENTES MOBILEO — accordéon ─────────────────────────────────────────
 // Les 8 catégories sont repliées par défaut : on voit la trame complète d'un
@@ -1804,14 +2191,19 @@ function GuidePage() {
   const toutOuvrir  = () => setOuverts(new Set(GUIDE_IDS));
   const toutFermer  = () => setOuverts(new Set());
 
-  const Section = ({ id, icon, title, hint, children }) => {
+  const Section = ({ id, title, hint, children }) => {
     const open = ouverts.has(id);
+    const meta = GUIDE_META.find(g => g.id === id) || {};
+    const n = GUIDE_IDS.indexOf(id) + 1;
     return (
-      <div className={`acc${open ? " open" : ""}`}>
+      <div className={`acc${open ? " open" : ""}`} style={{ "--acc-c": meta.c, "--acc-wash": meta.wash }}>
         <button className="acc-head" onClick={() => bascule(id)} aria-expanded={open}>
-          <span className="acc-num">{GUIDE_IDS.indexOf(id) + 1}</span>
-          <span className="acc-title">{title}</span>
-          {hint && <span className="acc-hint">{hint}</span>}
+          <span className="acc-ico">{meta.icon}</span>
+          <span className="acc-title">
+            <b>{title}</b>
+            {hint && <span>{hint}</span>}
+          </span>
+          <span className="acc-num">{n}/8</span>
           <span className="acc-chev">▶</span>
         </button>
         <div className="acc-body">
@@ -1822,10 +2214,7 @@ function GuidePage() {
   };
 
   const Row = ({ k, v }) => (
-    <div style={{ display: "flex", gap: 14, padding: "9px 0", borderBottom: `1px solid var(--line-2)` }}>
-      <div style={{ minWidth: 165, fontSize: 12.5, fontWeight: 700, flexShrink: 0 }}>{k}</div>
-      <div style={{ fontSize: 13, color: "var(--sub)", lineHeight: 1.6 }}>{v}</div>
-    </div>
+    <div className="guide-row"><div className="k">{k}</div><div className="v">{v}</div></div>
   );
 
   return (
@@ -1857,10 +2246,7 @@ function GuidePage() {
             ["Reformuler avant d'argumenter", "La reformulation montre que l'on écoute et permet de répondre précisément à l'objection."],
             ["Rester crédible", "Lorsque l'offre actuelle est réellement meilleure, on le reconnaît. Cela renforce la confiance."],
           ].map(([t, d]) => (
-            <div key={t} style={{ padding: "8px 12px", background: C.bg, borderRadius: 8 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: C.navy, marginBottom: 2 }}>{t}</div>
-              <div style={{ fontSize: 12, color: C.gray600, lineHeight: 1.55 }}>{d}</div>
-            </div>
+            <div key={t} className="guide-block"><b>{t}</b><span>{d}</span></div>
           ))}
         </div>
       </Section>
@@ -2038,7 +2424,9 @@ export default function App() {
     setPage(id); setMenuOpen(false);
   };
 
-  if (!user) return <LoginScreen serverState={serverState} onRetryPing={checkServer} onLogin={(u) => { setUser(u); setPage("dashboard"); }} />;
+  const Styles = () => <style dangerouslySetInnerHTML={{ __html: STYLES }} />;
+
+  if (!user) return <><Styles /><LoginScreen serverState={serverState} onRetryPing={checkServer} onLogin={(u) => { setUser(u); setPage("dashboard"); }} /></>;
 
   const nav = [
     { id: "dashboard", label: "Vue d'ensemble" },
@@ -2053,6 +2441,7 @@ export default function App() {
 
   return (
     <>
+      <Styles />
       <nav className="nav">
         <img className="nav-logo" src={logoRepairMobile} alt="Repair Mobile" />
         <div>
