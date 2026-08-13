@@ -115,18 +115,45 @@ const GOAT_VENDORS = {
 // chiffres figés quand l'API ne répond pas revient à faire croire qu'ils sont à
 // jour. En cas d'échec de lecture, l'écran GOAT affiche un état d'erreur daté.
 
+// ─── SAISONS — une saison va de juin à mai de l'année suivante ───────────────
+const SAISON_DEBUT_MOIS = 6; // juin
+
+// "2026-07-14" → "2026-2027" · "2026-04-02" → "2025-2026"
+function saisonDe(iso) {
+  if (!iso) return null;
+  const [y, m] = String(iso).slice(0, 10).split("-").map(Number);
+  if (!y || !m) return null;
+  const debut = m >= SAISON_DEBUT_MOIS ? y : y - 1;
+  return `${debut}-${debut + 1}`;
+}
+
+function saisonCourante() {
+  const d = new Date();
+  const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+  return saisonDe(iso);
+}
+
+const saisonLibelle = (cle) => {
+  if (!cle) return "—";
+  const [a, b] = cle.split("-");
+  return `Juin ${a} — Mai ${b}`;
+};
+
+// Points de saison : 3 par MVP mensuel, 1 par MVP hebdomadaire
 function computeGoatSeasonPoints(titlesHistory) {
   const pts = {};
   (titlesHistory || []).forEach(t => {
-    if (!pts[t.winner]) pts[t.winner] = { weeks: 0, months: 0, points: 0 };
+    if (!pts[t.winner]) pts[t.winner] = { weeks: 0, months: 0, points: 0, store: t.store };
+    if (t.store && !pts[t.winner].store) pts[t.winner].store = t.store;
     if (t.type === "week")  { pts[t.winner].weeks  += 1; pts[t.winner].points += 1; }
     if (t.type === "month") { pts[t.winner].months += 1; pts[t.winner].points += 3; }
   });
   return Object.entries(pts)
-    .map(([name, p]) => ({ name, store: GOAT_VENDORS[name]?.store, ...p }))
-    .sort((a, b) => b.points - a.points);
+    .map(([name, p]) => ({ name, ...p, store: p.store || GOAT_VENDORS[name]?.store }))
+    .sort((a, b) => b.points - a.points || b.months - a.months);
 }
 
+// Série de titres mensuels consécutifs, sur la période fournie
 function computeCurrentStreak(titlesHistory) {
   const monthly = (titlesHistory || []).filter(t => t.type === "month");
   if (monthly.length === 0) return null;
@@ -136,6 +163,22 @@ function computeCurrentStreak(titlesHistory) {
     if (curCount > bestCount) { bestCount = curCount; bestName = curName; }
   }
   return { name: bestName, count: bestCount };
+}
+
+// Regroupe les titres par saison et désigne le GOAT de chaque saison terminée
+function palmaresParSaison(titlesHistory, saisonEnCours) {
+  const parSaison = {};
+  (titlesHistory || []).forEach(t => {
+    const cle = saisonDe(t.start);
+    if (!cle || cle === saisonEnCours) return;
+    (parSaison[cle] = parSaison[cle] || []).push(t);
+  });
+  return Object.entries(parSaison)
+    .map(([cle, titres]) => {
+      const classement = computeGoatSeasonPoints(titres);
+      return { cle, vainqueur: classement[0], classement };
+    })
+    .sort((a, b) => b.cle.localeCompare(a.cle));
 }
 
 // ─── UTILS ────────────────────────────────────────────────────────────────────
@@ -1989,18 +2032,21 @@ function GoatRow({ rank, name, store, score, isSolo, breakdown, suffix }) {
   );
 }
 
-function GoatHistory({ label, entries }) {
-  if (!entries?.length) return null;
+function GoatHistory({ label, entries, vide }) {
+  if (!entries?.length) {
+    return vide ? <div className="hist"><div className="hist-body" style={{ padding: "13px 15px" }}>
+      <span className="meta">{vide}</span></div></div> : null;
+  }
   return (
     <details className="hist">
       <summary>{label} ({entries.length})</summary>
       <div className="hist-body">
         {entries.map((t, i) => (
           <div className="hist-row" key={i}>
-            <span className="per">{t.label}</span>
+            <span className="per">{t.periode}</span>
             <span style={{ display: "flex", gap: 9, alignItems: "baseline" }}>
-              <span className="who">{t.winner}</span>
-              {t.score != null && <span className="sc">{t.score}</span>}
+              <span className="who">{t.gagnant}</span>
+              {t.detail && <span className="sc">{t.detail}</span>}
             </span>
           </div>
         ))}
@@ -2009,7 +2055,7 @@ function GoatHistory({ label, entries }) {
   );
 }
 
-function GoatColumn({ variant, icon, kicker, title, subtitle, hero, rows, history, historyLabel, emptyLabel }) {
+function GoatColumn({ variant, icon, kicker, title, subtitle, hero, rows, history, historyLabel, emptyLabel, emptyHistory }) {
   return (
     <div className={`goat-card k-${variant}`}>
       <div className="goat-head">
@@ -2019,7 +2065,7 @@ function GoatColumn({ variant, icon, kicker, title, subtitle, hero, rows, histor
       </div>
       {hero}
       {rows?.length ? rows : <div className="empty" style={{ padding: "22px 14px" }}>{emptyLabel}</div>}
-      <GoatHistory label={historyLabel} entries={history} />
+      <GoatHistory label={historyLabel} entries={history} vide={emptyHistory} />
     </div>
   );
 }
@@ -2062,10 +2108,23 @@ function GoatPage({ user, goatData, goatError, lastLoaded, onRefresh, refreshing
 
   const data = goatData;
   const titres = data.titlesHistory || [];
-  const seasonPoints = computeGoatSeasonPoints(titres);
-  const goat = seasonPoints[0];
-  const streak = computeCurrentStreak(titres);
-  const showStreak = streak && streak.count >= 3;
+  const saison = saisonCourante();
+
+  // Si le backend ne renvoie pas encore la date des titres, on ne peut pas les
+  // rattacher à une saison : on affiche tout, en le disant.
+  const datesDispo = titres.some(t => t.start);
+  const dansSaison = (t) => !datesDispo || saisonDe(t.start) === saison;
+
+  const titresSaison  = titres.filter(dansSaison);
+  const moisSaison    = titresSaison.filter(t => t.type === "month");
+  const semainesSaison = titresSaison.filter(t => t.type === "week");
+
+  const classementSaison = computeGoatSeasonPoints(titresSaison);
+  const goat = classementSaison[0];
+  const streak = computeCurrentStreak(moisSaison);
+  const showStreak = streak && streak.count >= 2;
+
+  const saisonsPassees = datesDispo ? palmaresParSaison(titres, saison) : [];
 
   const moisScores = [...(data.monthly?.scores || [])].sort((a, b) => b.total - a.total);
   const semScores  = [...(data.weekly?.scores  || [])].sort((a, b) => b.total - a.total);
@@ -2076,7 +2135,8 @@ function GoatPage({ user, goatData, goatError, lastLoaded, onRefresh, refreshing
         <div>
           <h1 className="h-screen">🐐 GOAT — Classement vendeurs</h1>
           <p>
-            Score sur 100, chaque indicateur plafonné à son objectif · bonus +10 % pour les magasins solo
+            Saison en cours : <b>{saisonLibelle(saison)}</b> · score sur 100, chaque indicateur plafonné à son
+            objectif, bonus +10 % pour les magasins solo
             {lastLoaded ? ` · lu dans Notion ${stampLabel(lastLoaded)}` : ""}
           </p>
         </div>
@@ -2085,15 +2145,25 @@ function GoatPage({ user, goatData, goatError, lastLoaded, onRefresh, refreshing
         </Btn>}
       </div>
 
+      {!datesDispo && (
+        <Card accent={C.bad}>
+          <div className="note" style={{ margin: 0 }}>
+            Les titres remontent sans leur date : impossible de les répartir par saison. Le classement affiché
+            couvre donc <b>tout l'historique</b>, pas seulement la saison en cours. Déployer la dernière version
+            du backend corrige ce point.
+          </div>
+        </Card>
+      )}
+
       <GoatLegend />
 
       <div className="goat-cols">
-        {/* ── Colonne 1 : la saison écoulée ── */}
+        {/* ── Colonne 1 : la saison en cours ── */}
         <GoatColumn
           variant="saison" icon="🐐"
-          kicker="Saison écoulée"
+          kicker={`Saison ${saison?.replace("-", " – ")}`}
           title="GOAT de la saison"
-          subtitle="1 point par MVP de la semaine · 3 points par MVP du mois"
+          subtitle={`${saisonLibelle(saison)} · 3 points par MVP du mois, 1 point par MVP de la semaine`}
           hero={goat && (
             <div className="goat-hero">
               <div className="badge">🐐</div>
@@ -2102,25 +2172,30 @@ function GoatPage({ user, goatData, goatError, lastLoaded, onRefresh, refreshing
                 <span>{goat.store}</span>
                 <div className="goat-tags">
                   {goat.months > 0 && <span className="goat-tag tag-gold">🏆 {goat.months} mois</span>}
-                  {goat.weeks > 0 && <span className="goat-tag tag-brand">⭐ {goat.weeks} semaines</span>}
+                  {goat.weeks > 0 && <span className="goat-tag tag-brand">⭐ {goat.weeks} semaine{goat.weeks > 1 ? "s" : ""}</span>}
                   {showStreak && <span className="goat-tag tag-fire">🔥 {streak.count} d'affilée</span>}
                 </div>
               </div>
               <div className="pts"><b>{goat.points}</b><span>points</span></div>
             </div>
           )}
-          rows={seasonPoints.slice(1).map((p, i) => (
+          rows={classementSaison.slice(1).map((p, i) => (
             <GoatRow key={p.name} rank={i + 2} name={p.name} store={p.store} score={p.points} suffix="pts" />
           ))}
-          emptyLabel="Aucun titre décerné pour l'instant."
-          historyLabel="Tous les titres de la saison"
-          history={titres}
+          emptyLabel="La saison vient de commencer : aucun titre décerné pour l'instant."
+          historyLabel="Les saisons précédentes"
+          emptyHistory="Première saison en cours de calcul — aucune saison terminée avant celle-ci."
+          history={saisonsPassees.map(s => ({
+            periode: saisonLibelle(s.cle),
+            gagnant: s.vainqueur?.name || "—",
+            detail: s.vainqueur ? `${s.vainqueur.points} pts` : null,
+          }))}
         />
 
-        {/* ── Colonne 2 : le mois ── */}
+        {/* ── Colonne 2 : le mois écoulé ── */}
         <GoatColumn
           variant="mois" icon="🏆"
-          kicker="Mois"
+          kicker="Mois précédent"
           title="MVP du mois"
           subtitle={data.monthly?.label || "Période non renseignée"}
           rows={moisScores.map((v, i) => (
@@ -2128,14 +2203,15 @@ function GoatPage({ user, goatData, goatError, lastLoaded, onRefresh, refreshing
               isSolo={v.isSolo} breakdown={v.breakdown} suffix="/100" />
           ))}
           emptyLabel="Pas encore de classement mensuel."
-          historyLabel="Les mois précédents"
-          history={titres.filter(t => t.type === "month")}
+          historyLabel="Les mois de la saison"
+          emptyHistory="Aucun MVP mensuel décerné depuis le début de la saison."
+          history={moisSaison.map(t => ({ periode: t.label, gagnant: t.winner, detail: t.score }))}
         />
 
-        {/* ── Colonne 3 : la semaine ── */}
+        {/* ── Colonne 3 : la semaine écoulée ── */}
         <GoatColumn
           variant="semaine" icon="⭐"
-          kicker="Semaine"
+          kicker="Semaine précédente"
           title="MVP de la semaine"
           subtitle={data.weekly?.label || "Période non renseignée"}
           rows={semScores.map((v, i) => (
@@ -2143,8 +2219,9 @@ function GoatPage({ user, goatData, goatError, lastLoaded, onRefresh, refreshing
               isSolo={v.isSolo} breakdown={v.breakdown} suffix="/100" />
           ))}
           emptyLabel="Pas encore de classement hebdomadaire."
-          historyLabel="Les semaines précédentes"
-          history={titres.filter(t => t.type === "week")}
+          historyLabel="Les semaines de la saison"
+          emptyHistory="Aucun MVP hebdomadaire décerné depuis le début de la saison."
+          history={semainesSaison.map(t => ({ periode: t.label, gagnant: t.winner, detail: t.score }))}
         />
       </div>
 
