@@ -35,7 +35,9 @@ const AUTH_KEY = "save-pilotage-auth";
 // Notion peut renvoyer le caractère de remplacement Unicode lorsqu'une
 // ancienne puce/emoji n'est plus décodable. On garde alors un texte lisible.
 function cleanNotionText(value) {
-  if (typeof value === "string") return value.replace(/\uFFFD/g, "•");
+  if (typeof value === "string") {
+    return value.replace(/[\uFFFD]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "•");
+  }
   if (Array.isArray(value)) return value.map(cleanNotionText);
   if (value && typeof value === "object") {
     return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, cleanNotionText(item)]));
