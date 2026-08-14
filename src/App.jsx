@@ -32,6 +32,17 @@ async function pingHealth() {
 // réelle (12 h côté backend).
 const AUTH_KEY = "save-pilotage-auth";
 
+// Notion peut renvoyer le caractère de remplacement Unicode lorsqu'une
+// ancienne puce/emoji n'est plus décodable. On garde alors un texte lisible.
+function cleanNotionText(value) {
+  if (typeof value === "string") return value.replace(/\uFFFD/g, "•");
+  if (Array.isArray(value)) return value.map(cleanNotionText);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, cleanNotionText(item)]));
+  }
+  return value;
+}
+
 function jwtExpiry(token) {
   try {
     const part = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
@@ -2432,7 +2443,7 @@ export default function App() {
         api.get(`/api/vendors${q}`).catch(e => { setVendorsError(e.message || "endpoint indisponible"); return null; }),
         api.get(`/api/actions${q}`).catch(() => ({ actions: [] })),
       ]);
-      setResults(r);
+      setResults(cleanNotionText(r));
       setVisits(v.visits);
       setHistory(h);
       setGoatData(g);
