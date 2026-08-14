@@ -775,6 +775,16 @@ function moisEnCours() {
   return { annee, mois, ecoules, total, ratio: total ? ecoules / total : 0 };
 }
 
+// Les projections suivent la dernière journée réellement saisie dans
+// Notion, pas la date de l'appareil qui consulte le tableau de bord.
+function moisPourDonnees(data) {
+  const courant = moisEnCours();
+  const ecoules = Number(data?.workdays?.elapsed);
+  const total = Number(data?.workdays?.total);
+  if (!ecoules || !total) return courant;
+  return { ...courant, ecoules, total, ratio: ecoules / total };
+}
+
 function projeter(valeur, { ecoules, total }) {
   if (valeur == null || !ecoules) return null;
   return Math.round((valeur / ecoules) * total);
@@ -871,7 +881,7 @@ function Dashboard({ user, data, onOpenStore }) {
   const isRZ = user.role === "rz";
   const stores = isRZ ? STORES_ORDER : [user.store];
   const d = data?.page1, d2 = data?.page2;
-  const mois = moisEnCours();
+  const mois = moisPourDonnees(data);
   const t = totauxZone(d, d2, stores);
   const priorites = calculerPriorites(d, d2, stores, mois);
   const faits = (data?.faitsMarquants?.length ? data.faitsMarquants : data?.syntheseRZ ? [data.syntheseRZ] : []);
@@ -2390,7 +2400,7 @@ export default function App() {
   const [error, setError] = useState("");
   const [serverState, setServerState] = useState("checking"); // checking | waking | ok | down
 
-  const mois = moisEnCours();
+  const mois = moisPourDonnees(results);
 
   // ─── Réveil du serveur : on sonde /api/health au démarrage ─────────────────
   const checkServer = useCallback(async () => {
@@ -2415,7 +2425,8 @@ export default function App() {
     try {
       const [r, v, h, g, vd, ac] = await Promise.all([
         api.get(`/api/results${q}`),
-        api.get(`/api/visits${q}`),
+        // Une panne de la base Visites ne doit pas masquer les résultats.
+        api.get(`/api/visits${q}`).catch(() => ({ visits: [] })),
         api.get(`/api/history${q}`).catch(() => ({ months: [], byStore: {} })),
         api.get(`/api/goat${q}`).catch(e => { setGoatError(e.message || "lecture impossible"); return null; }),
         api.get(`/api/vendors${q}`).catch(e => { setVendorsError(e.message || "endpoint indisponible"); return null; }),
@@ -2469,6 +2480,9 @@ export default function App() {
     { id: "visits",    label: "Visites" },
   ];
   const navActive = page;
+  const dataStamp = results?.updated
+    ? `Données au ${results.updated}`
+    : lastLoaded ? `Données ${stampLabel(lastLoaded)}` : "—";
 
   return (
     <>
@@ -2489,7 +2503,7 @@ export default function App() {
         <div className="nav-right">
           <div className="nav-stamp">
             <i style={{ background: serverState === "down" ? C.bad : (loading || refreshing) ? C.warn : C.ok }} />
-            {(loading || refreshing) ? "Lecture Notion…" : lastLoaded ? `Données ${stampLabel(lastLoaded)}` : "—"}
+            {(loading || refreshing) ? "Lecture Notion…" : dataStamp}
           </div>
           <div className="nav-user">
             <b>{user.name}</b>
@@ -2507,7 +2521,7 @@ export default function App() {
             {user.role === "rz" ? "Responsable de zone" : "Magasin"}
           </div>
           <div style={{ color: "rgba(255,255,255,.45)", fontSize: 11, marginTop: 4 }}>
-            {lastLoaded ? `Données ${stampLabel(lastLoaded)}` : "—"}
+            {dataStamp}
           </div>
         </div>
         {nav.map(({ id, label }) => (
