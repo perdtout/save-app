@@ -247,6 +247,30 @@ const api = {
     }
     return res.json();
   },
+  // Écriture — introduite avec les dossiers ATM. Même gestion du 401 que get().
+  async send(path, method, body) {
+    const res = await fetch(`${API_URL}${path}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${this.token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body || {}),
+    });
+    if (res.status === 401) {
+      this.logout();
+      const e = new Error("Session expirée, reconnecte-toi.");
+      e.code = "auth";
+      throw e;
+    }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `Erreur ${res.status}`);
+    }
+    return res.json();
+  },
+  post(path, body) { return this.send(path, "POST", body); },
+  patch(path, body) { return this.send(path, "PATCH", body); },
 };
 
 // __STYLES_START__
@@ -326,6 +350,103 @@ button{font-family:inherit}
 .nav-mobile button{text-align:left;padding:12px 14px;border-radius:9px;border:none;background:transparent;
   color:rgba(255,255,255,.75);font-size:14.5px;font-weight:500;cursor:pointer;margin-bottom:2px}
 .nav-mobile button.on{background:var(--brand);color:#fff;font-weight:600}
+.nav-mobile .nav-mobile-fam{padding:12px 14px 5px;color:rgba(255,255,255,.4);font-size:10px;
+  font-weight:700;letter-spacing:.1em;text-transform:uppercase}
+
+/* ─── Second niveau de navigation ───────────────────────────────────────── */
+.nav2{background:#fff;border-bottom:1px solid var(--line);position:sticky;top:58px;z-index:98;
+  padding:0 20px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.nav2-in{max-width:1200px;margin:0 auto;display:flex;gap:6px;padding:9px 0;align-items:center}
+.nav2-hint{font-size:11px;color:var(--muted);font-weight:600;margin-right:6px;white-space:nowrap}
+.nav2 button{border:1px solid var(--line);background:#fff;color:var(--sub);font-size:12.5px;
+  font-weight:600;padding:6px 13px;border-radius:999px;cursor:pointer;white-space:nowrap}
+.nav2 button:hover{border-color:var(--brand);color:var(--brand)}
+.nav2 button.on{background:var(--ink);border-color:var(--ink);color:#fff}
+
+/* ─── Sinistres ATM ─────────────────────────────────────────────────────── */
+.atm-alert{display:flex;gap:12px;align-items:center;padding:13px 16px;border-radius:12px;
+  background:var(--bad-wash);border:1px solid #E7C9C7;margin-bottom:18px}
+.atm-alert b{font-size:13.5px}
+.atm-alert p{margin:2px 0 0;font-size:12.5px;color:var(--sub)}
+.atm-alert .ic{font-size:19px;flex-shrink:0}
+
+.atm-gold{background:var(--bad-wash);border:1px solid #E7C9C7;border-radius:13px;padding:14px 17px}
+.atm-gold b.t{display:block;font-size:11.5px;letter-spacing:.05em;color:var(--bad);margin-bottom:7px}
+.atm-gold ul{margin:0;padding-left:18px;color:var(--sub);font-size:13px}
+.atm-gold li{margin:3px 0}
+
+.atm-kpi{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.atm-kpi .k{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;border-left:4px solid var(--line)}
+.atm-kpi .k.w{border-left-color:var(--warn)} .atm-kpi .k.b{border-left-color:var(--bad)} .atm-kpi .k.o{border-left-color:var(--ok)}
+.atm-kpi .n{font-size:25px;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums}
+.atm-kpi .l{font-size:12px;font-weight:700;color:var(--sub);margin-top:2px}
+.atm-kpi .d{font-size:11px;color:var(--muted);margin-top:2px}
+
+.atm-row{display:flex;gap:14px;align-items:center;padding:13px 16px;border-bottom:1px solid var(--line);
+  cursor:pointer;border-left:4px solid transparent;background:none;width:100%;text-align:left;font:inherit}
+.atm-row:last-child{border-bottom:none}
+.atm-row:hover{background:var(--line-2)}
+.atm-row.late{border-left-color:var(--bad)} .atm-row.wait{border-left-color:var(--warn)} .atm-row.go{border-left-color:var(--ok)}
+.atm-row .m{flex:1;min-width:0}
+.atm-row .r{font-size:13.5px;font-weight:700}
+.atm-row .s{font-size:12px;color:var(--muted);margin-top:1px}
+.atm-row .mini{width:118px;flex-shrink:0}
+.atm-bar{height:5px;background:var(--line-2);border-radius:999px;overflow:hidden}
+.atm-bar i{display:block;height:100%;background:var(--brand)}
+.atm-bar-l{font-size:10.5px;font-weight:700;color:var(--muted);margin-top:3px;text-align:right}
+
+.atm-form{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.atm-form label{display:block;font-size:11px;font-weight:700;color:var(--sub);margin-bottom:4px}
+.atm-form input,.atm-form select{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;
+  font-size:13.5px;background:#fff;font-family:inherit;color:var(--ink)}
+.atm-form input:focus,.atm-form select:focus{outline:2px solid var(--brand);outline-offset:-1px;border-color:transparent}
+
+.atm-wrap{display:grid;grid-template-columns:236px 1fr;gap:18px;align-items:start}
+.atm-rail{background:#fff;border:1px solid var(--line);border-radius:13px;padding:7px;position:sticky;top:112px}
+.atm-rail button{display:flex;gap:10px;align-items:flex-start;width:100%;text-align:left;border:none;
+  background:none;padding:9px 10px;border-radius:9px;cursor:pointer;font:inherit;color:var(--sub)}
+.atm-rail button:hover{background:var(--line-2)}
+.atm-rail button.on{background:var(--ink);color:#fff}
+.atm-rail button.on .n{background:var(--brand);border-color:var(--brand);color:#fff}
+.atm-rail .n{flex-shrink:0;width:21px;height:21px;border-radius:50%;border:1.5px solid var(--line);
+  display:grid;place-items:center;font-size:10.5px;font-weight:800;color:var(--muted);background:#fff;margin-top:1px}
+.atm-rail .n.done{background:var(--ok);border-color:var(--ok);color:#fff}
+.atm-rail .l{font-size:12.5px;font-weight:600;line-height:1.3}
+.atm-rail .l span{display:block;font-size:10.5px;font-weight:600;opacity:.62;margin-top:1px}
+
+.atm-todo{list-style:none;margin:11px 0;padding:0}
+.atm-todo li{display:flex;gap:10px;align-items:flex-start;padding:9px 12px;border:1px solid var(--line);
+  border-radius:10px;margin-bottom:6px;cursor:pointer}
+.atm-todo li:hover{background:var(--line-2)}
+.atm-todo li.on{background:var(--ok-wash);border-color:#CFE3D8}
+.atm-todo .b{flex-shrink:0;width:18px;height:18px;border-radius:5px;border:1.5px solid var(--line);
+  background:#fff;display:grid;place-items:center;font-size:11px;color:#fff;margin-top:1px}
+.atm-todo li.on .b{background:var(--ok);border-color:var(--ok)}
+.atm-todo li.on .b::after{content:"✓"}
+.atm-todo .t{font-size:13.5px}
+.atm-todo .t em{display:block;font-style:normal;color:var(--muted);font-size:12px;margin-top:2px}
+
+.atm-note{border-left:3px solid var(--brand);background:var(--brand-wash);padding:11px 14px;
+  border-radius:0 10px 10px 0;margin:14px 0;font-size:13px}
+.atm-stop{border-left:3px solid var(--bad);background:var(--bad-wash);padding:11px 14px;
+  border-radius:0 10px 10px 0;margin:14px 0;font-size:13px}
+.atm-branch{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin:13px 0}
+.atm-opt{border:1.5px solid var(--line);border-radius:11px;padding:13px;cursor:pointer;background:#fff;
+  text-align:left;font:inherit;color:var(--ink)}
+.atm-opt:hover{border-color:var(--brand)}
+.atm-opt.on{border-color:var(--brand);background:var(--brand-wash)}
+.atm-opt b{display:block;font-size:13.5px;margin-bottom:3px}
+.atm-opt span{font-size:12.5px;color:var(--sub)}
+.atm-kv{border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:12px 0}
+.atm-kv div{display:flex;gap:12px;padding:9px 12px;border-bottom:1px solid var(--line);font-size:13px}
+.atm-kv div:last-child{border-bottom:none}
+.atm-kv span:first-child{flex-shrink:0;width:186px;font-weight:700;color:var(--sub)}
+.atm-annex{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 2px}
+.atm-annex a{display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:#fff;
+  border-radius:10px;padding:9px 12px;text-decoration:none;color:var(--ink);font-size:12.5px;font-weight:600}
+.atm-annex a:hover{border-color:var(--brand);color:var(--brand)}
+.atm-save{font-size:11.5px;font-weight:700;color:var(--muted)}
+.atm-save.ko{color:var(--bad)}
 
 main{max-width:1200px;margin:0 auto;padding:28px 20px 64px}
 
@@ -477,9 +598,27 @@ table.tbl tr.clickable:hover td{background:var(--brand-wash)}
 .mrow b{font-weight:700;font-variant-numeric:tabular-nums}
 
 @media(max-width:900px){ .grid-3{grid-template-columns:repeat(2,1fr)} }
+@media(max-width:1000px){
+  .atm-wrap{grid-template-columns:1fr}
+  .atm-rail{position:static;display:flex;gap:6px;overflow-x:auto;padding:8px}
+  .atm-rail button{flex-shrink:0}
+  .atm-rail .l{white-space:nowrap}
+  .atm-rail .l span{display:none}
+  .atm-form{grid-template-columns:repeat(2,1fr)}
+}
 @media(max-width:768px){
   .nav-links,.nav-user,.nav-stamp{display:none}
   .nav-burger{display:inline-flex}
+  /* Deux barres collantes à la même hauteur se chevauchent quand le menu
+     mobile est ouvert : le second niveau redevient statique. */
+  .nav2{position:static}
+  .nav2-hint{display:none}
+  .atm-kpi{grid-template-columns:1fr}
+  .atm-form{grid-template-columns:1fr}
+  .atm-branch{grid-template-columns:1fr}
+  .atm-kv span:first-child{width:120px}
+  .atm-row{flex-wrap:wrap}
+  .atm-row .mini{width:100%}
   main{padding:18px 13px 56px}
   .grid-3{grid-template-columns:1fr}
   .card{padding:17px 16px}
@@ -2579,6 +2718,492 @@ function ProcessRow({ p, estRZ }) {
   );
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+//  SINISTRES ATM
+//  Le pas à pas d'un dossier, de la réception à la remise au client.
+//  Source : Process_Traitement_ATM_Repair (08/07/2020) + fiche Expertise &
+//  Devis (04/2023). En cas de contradiction entre les deux, c'est la version
+//  2023 qui fait foi — arbitrage validé le 17/08/2026.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const ATM_DRIVE = {
+  process:   "https://drive.google.com/file/d/1V6bDhIDMohd-CctnQ_B0hRcAp6jLCrLc/view",
+  expertise: "https://drive.google.com/file/d/16K6CFPHLaW2M1gh7NaIgKRL2lC5GBE1n/view",
+  irrep:     "https://drive.google.com/file/d/1_YxQcbTWmLlzO-uRYPdWBEI4qhCueOXE/view",
+};
+
+// Attestation de remise : toujours celle du magasin d'accueil du client,
+// jamais celle du réparateur. C'est l'erreur la plus fréquente en magasin.
+const ATM_ATTESTATIONS = {
+  "Pontarlier":       "https://drive.google.com/file/d/1-aQPrkQQtrFuTVwXacXujfcyne6TSC34/view",
+  "Lons-le-Saunier":  "https://drive.google.com/file/d/1khIWCC0Xqgw6mNDVDadodYBcwLMldJ-D/view",
+  "Dijon":            "https://drive.google.com/file/d/1QvWjHSH9tpCiiiia5I4v4R-kiHWYvMur/view",
+  "Besançon":         "https://drive.google.com/file/d/1rwx5GBs6uHQMMDi5VyRCRh5E0TtT9upl/view",
+  "Chalon-sur-Saône": "https://drive.google.com/file/d/11ooXytiE2_Eh0eyMXlK4-_3FX_e9Ne1J/view",
+  "Darty Pontarlier": "https://drive.google.com/file/d/1BB6UxNwWsumSXGDxzBqnALOK0wW5xvbj/view",
+  "Darty Lons":       "https://drive.google.com/file/d/1T5xXg8T_mU02tlRH2Bon563KCKeeHk3x/view",
+  "Fnac Pontarlier":  "https://drive.google.com/file/d/1YVrI5cOx0659v2C_wRIG4Bv303nllye7/view",
+};
+
+const ATM_ACCUEILS = [...STORES_ORDER, "Darty Pontarlier", "Darty Lons", "Fnac Pontarlier"];
+
+const ATM_STEPS = [
+  {
+    n: 1, lbl: "Réception", sub: "D'où vient l'appareil ?",
+    titre: "Réceptionner l'appareil et accuser réception",
+    qui: "Technicien qui reçoit le colis ou le client",
+    intro: "Deux portes d'entrée, deux gestes différents. Le point commun : rien ne commence tant que la réception n'est pas tracée.",
+    branch: {
+      q: "L'appareil arrive :",
+      a: { t: "Par le client, au comptoir", d: "Il vient de la part d'un Darty ou d'une Fnac et présente un courrier d'acceptation de sinistre ATM." },
+      b: { t: "Par navette, d'un Darty ou d'une Fnac", d: "Un ou plusieurs mobiles, avec un bordereau de livraison et une prise en charge par appareil." },
+    },
+    todoA: [
+      ["Prendre en charge le client sur Trépidai, comme une PEC classique", ""],
+      ["Photocopier le courrier d'acceptation et le joindre à la PEC", "C'est la seule preuve que le dossier est bien couvert."],
+      ["Faire signer la PEC au client et lui remettre son double", ""],
+      ["Reporter le n° de contrat et le n° de sinistre dans le dossier", "Ils commencent par 261 et figurent sur le courrier d'acceptation."],
+    ],
+    todoB: [
+      ["Contrôler le colis contre le bordereau de livraison", "Marque, modèle, IMEI, client, référence ATM : ligne par ligne."],
+      ["Vérifier qu'une prise en charge accompagne bien chaque appareil", ""],
+      ["Trépidai → Interventions → Brokers → icône liste sur le bon broker", "Tu retrouves toutes les interventions en cours liées à ce magasin."],
+      ["Éditer, contrôler, valider chaque ligne", "C'est la seule manière d'accuser réception du mobile. Sans ça, personne ne sait que tu l'as."],
+    ],
+    note: "Un colis, c'est de l'argent. Cale avec le directeur du Darty ou de la Fnac pour regrouper les envois plutôt que d'expédier appareil par appareil.",
+  },
+  {
+    n: 2, lbl: "Cohérence", sub: "Point de contrôle bloquant",
+    titre: "Contrôler la cohérence avant toute expertise",
+    qui: "Technicien — 5 minutes, avant d'ouvrir l'appareil",
+    intro: "Deux vérifications, et elles sont éliminatoires. Si l'une des deux tombe, l'expertise s'arrête là.",
+    todo: [
+      ["L'IMEI de l'appareil correspond à celui du contrat", "Compose *#06# et compare caractère par caractère avec la PEC."],
+      ["La typologie du sinistre correspond à ce qui est déclaré", "Déclaré « casse » et l'appareil est oxydé : c'est une incohérence."],
+      ["Le n° de contrat et le n° de sinistre sont bien renseignés", "Format 261… pour le contrat, 261…-1 pour le sinistre."],
+    ],
+    stop: "Une seule incohérence : on interrompt l'expertise et on renvoie l'information à ATM. On ne « fait pas au mieux », on ne répare pas en attendant. C'est ce qui protège le magasin en cas de litige.",
+  },
+  {
+    n: 3, lbl: "Expertise & devis", sub: "Envoi à ATM",
+    titre: "Remplir l'expertise, chiffrer le devis, envoyer",
+    qui: "Technicien",
+    intro: "Trois pièces partent ensemble, jamais séparément. Un dossier incomplet, c'est ATM qui ne répond pas et le client qui rappelle.",
+    kv: [
+      ["Destinataire", "sinistre@atm-assur.com"],
+      ["En copie systématique", "vincent@juvigroup.fr — Vincent Christ, sur chaque dossier"],
+      ["Photos", "2 photos JPEG, avant et arrière, moins de 5 Mo à elles deux"],
+      ["Fiche d'expertise", "version 04/2023, au format PDF"],
+      ["Article de caisse", "MECAATM — il porte toutes les mentions attendues"],
+    ],
+    todo: [
+      ["Compléter la fiche Expertise & Devis : client, appareil, IMEI, n° de contrat", ""],
+      ["Cocher la typologie du sinistre et le résultat du contrôle IMEI", ""],
+      ["Détailler les réparations, une ligne par intervention", "« Changement bloc écran », pas « réparation écran ». ATM refuse ce qu'elle ne comprend pas."],
+      ["Chiffrer au tarif public — le prix facturé à un client classique", ""],
+      ["Prendre les 2 photos, avant et arrière", ""],
+      ["Envoyer les 3 pièces en un seul mail, Vincent en copie", ""],
+    ],
+    note: "Le devis doit reprendre marque, client, n° de sinistre, modèle, IMEI et le détail de l'intervention (démontage / réparation / remontage / test). C'est ce bloc qui permet à ATM de rapprocher le devis du dossier.",
+  },
+  {
+    n: 4, lbl: "Réponse d'ATM", sub: "Accord, refus, renvoi",
+    titre: "Attendre la réponse — et ne rien faire d'ici là",
+    qui: "Technicien, responsable de zone si refus",
+    intro: "ATM répond de trois façons. Chacune a sa suite, et le délai n'est pas le même.",
+    info: [
+      ["✅ Accord de réparation", "On passe à la réparation, étape 5."],
+      ["↩︎ Devis refusé, trop cher", "On regarde ensemble si le devis peut être retravaillé. Réponse à ATM sous 48 h."],
+      ["⛔️ Second devis refusé", "Renvoi de l'appareil chez ATM sous 24 h, avec la prise en charge et le devis."],
+    ],
+    todo: [
+      ["Renseigner la date d'envoi du devis", "C'est elle qui déclenche l'alerte de relance au bout de 7 jours."],
+      ["À réception : enregistrer la réponse d'ATM et le montant accordé", ""],
+    ],
+    stop: "Tant que l'accord n'est pas arrivé, l'appareil ne s'ouvre pas et aucune pièce n'est commandée. Une réparation lancée sans accord n'est pas payée par l'assureur : elle sort de notre marge.",
+  },
+  {
+    n: 5, lbl: "Traitement", sub: "Réparable ou irréparable",
+    titre: "Traiter l'appareil", qui: "Technicien",
+    intro: "L'accord est arrivé. Deux chemins — et le second peut apparaître en cours de route, même après un accord.",
+    branch: {
+      q: "L'appareil est :",
+      a: { t: "Réparable", d: "Les pièces sont disponibles et la réparation est économiquement tenable." },
+      b: { t: "Irréparable", d: "Économiquement non réparable, ou pièces détachées indisponibles." },
+    },
+    todoA: [
+      ["Réaliser la réparation selon la charte de l'assureur", ""],
+      ["Trépidai → Diagnostic → En cours de diagnostic, puis valider", ""],
+      ["Trépidai → En cours de traitement → En cours de réparation", ""],
+      ["Tester l'appareil et vérifier la bonne fonctionnalité avant remontage final", ""],
+    ],
+    todoB: [
+      ["Refaire une fiche d'expertise avec la case IRRÉPARABLE cochée", ""],
+      ["Établir un devis à 0 € portant la mention « appareil irréparable »", "À la place du détail d'intervention."],
+      ["Indiquer le prix du même modèle en reconditionné Grade A", "Si tu l'as en stock. C'est la règle 2023 qui fait foi, plus la valeur du neuf."],
+      ["Renvoyer expertise + devis + 2 photos à ATM, Vincent en copie", ""],
+      ["Renseigner la ligne dans la trame des irréparables", "Marque, modèle, IMEI, motif, date de réception, n° sinistre, magasin d'accueil, magasin réparateur."],
+      ["Stocker l'appareil dans le carton « irréparables ATM » identifié en réserve", "Ne pas le cannibaliser. Chaque appareil est contrôlé à l'arrivée chez ATM."],
+      ["Trépidai → Non réparé", ""],
+      ["Prévenir le magasin d'accueil du client", ""],
+    ],
+    note: "ATM réclame la liste des irréparables de temps en temps pour organiser l'enlèvement. Une ligne mal remplie, c'est un appareil refusé au contrôle et un litige pour le magasin.",
+  },
+  {
+    n: 6, lbl: "Facturation", sub: "WinGSM",
+    titre: "Facturer la prestation", qui: "Technicien ou responsable de magasin",
+    intro: "La facture part à VCOM Group, l'entité du groupe qui distribue les contrats ATM. Jamais au client.",
+    todo: [
+      ["WinGSM → Commandes et Factures → Facturation", ""],
+      ["Récup BL : récupérer le devis généré pour ATM, répondre OUI à la question du système", ""],
+      ["Basculer le compte de facturation sur VCOMGRO", "VCOM Group, 3B rue Baronne Delort, 39300 Champagnole."],
+      ["Contrôler que les informations du sinistre sont exactes", "N° de sinistre, IMEI, modèle : c'est ce qui bloque un paiement."],
+      ["Appliquer 5 % de remise dans la colonne « Rem » de la ligne de prestation", "Se placer sur la ligne du forfait, colonne Rem, saisir 5."],
+      ["Valider la facture et l'envoyer par e-mail", "L'adresse est déjà dans la fiche du compte client."],
+    ],
+  },
+  {
+    n: 7, lbl: "Clôture", sub: "Trépidai",
+    titre: "Clôturer l'intervention", qui: "Technicien",
+    intro: "Un dossier non clôturé reste ouvert dans les statistiques et fausse le suivi.",
+    todo: [
+      ["Reprendre l'intervention dans Trépidai et la passer en Réparé", ""],
+      ["Indiquer précisément l'intervention réalisée, puis valider", ""],
+      ["Imprimer le rapport d'intervention et le joindre à l'appareil", ""],
+    ],
+  },
+  {
+    n: 8, lbl: "Retour & remise", sub: "Magasin ou client",
+    titre: "Renvoyer ou restituer", qui: "Technicien + magasin d'accueil",
+    intro: "Dernière ligne droite, et c'est là qu'on perd les dossiers.",
+    todo: [
+      ["Si l'appareil est arrivé par navette : le renvoyer vers le magasin d'origine", ""],
+      ["Ne joindre que le bon d'intervention — jamais la facture", "La facture est une pièce comptable entre nous et le groupe. Elle ne sort pas."],
+      ["Appeler le client pour l'informer que son appareil est prêt", ""],
+      ["Éditer l'attestation de remise du magasin d'accueil", "Celui où le client a acheté son mobile, pas celui qui répare."],
+      ["Compléter nom, prénom, marque, modèle, IMEI, date et lieu", ""],
+      ["Faire signer le client, apposer cachet et signature du point de vente", ""],
+      ["Archiver l'attestation dans le classeur ATM du magasin", "L'assureur peut la réclamer, parfois des mois après."],
+    ],
+    annexes: true,
+  },
+];
+
+const atmKey = (si, b, i) => `${si}|${b}|${i}`;
+
+function atmListeCases(d, si) {
+  const s = ATM_STEPS[si];
+  let out = (s.todo || []).map((_, i) => atmKey(si, "x", i));
+  if (s.branch) {
+    const b = d.branch?.[si];
+    if (!b) return out;
+    const arr = b === "a" ? s.todoA : s.todoB;
+    out = out.concat(arr.map((_, i) => atmKey(si, b, i)));
+  }
+  return out;
+}
+function atmEtapeFaite(d, si) {
+  const l = atmListeCases(d, si);
+  return l.length > 0 && l.every(k => d.checks?.[k]);
+}
+function atmProgression(d) {
+  let total = 0, faits = 0;
+  ATM_STEPS.forEach((s, i) => {
+    const l = atmListeCases(d, i);
+    total += l.length || ((s.todo?.length || 0) + (s.branch ? Math.min(s.todoA.length, s.todoB.length) : 0));
+    faits += l.filter(k => d.checks?.[k]).length;
+  });
+  return total ? Math.round(faits / total * 100) : 0;
+}
+function atmJours(iso) {
+  if (!iso) return null;
+  return Math.round((Date.now() - new Date(iso).getTime()) / 86400000);
+}
+function atmEtat(d) {
+  if (d.statut === "Irréparable") return { l: "Irréparable", c: "bad", k: "late" };
+  if (d.statut === "Renvoyé ATM") return { l: "Renvoyé à ATM", c: "neutral", k: "" };
+  if (d.statut === "En attente accord") {
+    const j = atmJours(d.dateEnvoiDevis);
+    return j != null && j > 7
+      ? { l: `Sans réponse depuis ${j} j`, c: "bad", k: "late" }
+      : { l: "En attente d'accord", c: "warn", k: "wait" };
+  }
+  if (d.statut === "En réparation") return { l: "En réparation", c: "ok", k: "go" };
+  return { l: "En expertise", c: "neutral", k: "go" };
+}
+
+/** Bandeau « À reprendre » de la Vue d'ensemble. */
+function AtmAlerts({ atm, onOpen }) {
+  const ind = atm?.indicateurs;
+  if (!ind || !ind.aRelancer) return null;
+  const d = ind.detailRelance || [];
+  return (
+    <button className="atm-alert" onClick={onOpen} style={{ width: "100%", cursor: "pointer", font: "inherit", textAlign: "left" }}>
+      <span className="ic">⏳</span>
+      <span style={{ flex: 1 }}>
+        <b>{ind.aRelancer} dossier{ind.aRelancer > 1 ? "s" : ""} ATM sans réponse depuis plus de 7 jours</b>
+        <p>{d.slice(0, 3).map(x => `${x.sinistre} · ${x.magasin} · ${x.joursSansReponse} j`).join(" — ")}</p>
+      </span>
+      <Chip status="bad">À relancer</Chip>
+    </button>
+  );
+}
+
+function AtmListe({ atm, error, onOpen, onCreate, user, creating }) {
+  const [form, setForm] = useState(false);
+  const [f, setF] = useState({
+    sinistre: "", contrat: "", client: "", marque: "", modele: "", imei: "",
+    typeSinistre: "Casse",
+    magasinAccueil: user.role === "rz" ? STORES_ORDER[0] : user.store,
+    magasinReparateur: user.role === "rz" ? STORES_ORDER[0] : user.store,
+  });
+  const set = (k) => (e) => setF(p => ({ ...p, [k]: e.target.value }));
+
+  const dossiers = atm?.dossiers || [];
+  const ind = atm?.indicateurs || {};
+
+  if (error) {
+    return <div className="stack"><h1 className="h-screen">Sinistres ATM</h1><ErrorBanner message={error} /></div>;
+  }
+  if (atm && atm.configured === false) {
+    return (
+      <div className="stack">
+        <h1 className="h-screen">Sinistres ATM</h1>
+        <Card><div className="proc-empty">
+          La base des dossiers ATM n'est pas encore connectée. Rien n'est perdu : le pas à pas
+          reste consultable dès que la variable NOTION_ATM_DB_ID sera renseignée.
+        </div></Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="stack">
+      <div className="ctx" style={{ justifyContent: "space-between", width: "100%" }}>
+        <div>
+          <h1 className="h-screen">Sinistres ATM</h1>
+          <p>Chaque dossier reste ici jusqu'à la remise au client. Une fois clôturé, il sort de la liste et reste archivé dans Notion.</p>
+        </div>
+        <Btn size="sm" onClick={() => setForm(o => !o)}>{form ? "Annuler" : "+ Nouveau dossier"}</Btn>
+      </div>
+
+      <div className="atm-kpi">
+        <div className="k o"><div className="n">{dossiers.length}</div><div className="l">dossiers ouverts</div>
+          <div className="d">{user.role === "rz" ? "toute la zone" : user.store}</div></div>
+        <div className="k w"><div className="n">{ind.enAttenteAccord ?? 0}</div><div className="l">en attente d'accord</div>
+          <div className="d">rien ne se répare d'ici là</div></div>
+        <div className="k b"><div className="n">{ind.aRelancer ?? 0}</div><div className="l">à relancer</div>
+          <div className="d">plus de 7 jours sans réponse d'ATM</div></div>
+      </div>
+
+      {form && (
+        <Card>
+          <SectionHead>Ouvrir un dossier</SectionHead>
+          <div className="atm-form">
+            <div><label>N° de sinistre ATM *</label><input value={f.sinistre} onChange={set("sinistre")} placeholder="261…-1" /></div>
+            <div><label>N° de contrat</label><input value={f.contrat} onChange={set("contrat")} placeholder="261…" /></div>
+            <div><label>Client *</label><input value={f.client} onChange={set("client")} placeholder="NOM Prénom" /></div>
+            <div><label>Marque</label><input value={f.marque} onChange={set("marque")} placeholder="Apple" /></div>
+            <div><label>Modèle</label><input value={f.modele} onChange={set("modele")} placeholder="iPhone 13" /></div>
+            <div><label>IMEI</label><input value={f.imei} onChange={set("imei")} placeholder="15 chiffres" /></div>
+            <div><label>Magasin d'accueil du client</label>
+              <select value={f.magasinAccueil} onChange={set("magasinAccueil")}>
+                {ATM_ACCUEILS.map(s => <option key={s}>{s}</option>)}
+              </select></div>
+            <div><label>Magasin réparateur</label>
+              <select value={f.magasinReparateur} onChange={set("magasinReparateur")} disabled={user.role !== "rz"}>
+                {STORES_ORDER.map(s => <option key={s}>{s}</option>)}
+              </select></div>
+            <div><label>Type de sinistre</label>
+              <select value={f.typeSinistre} onChange={set("typeSinistre")}>
+                <option>Casse</option><option>Oxydation</option>
+              </select></div>
+          </div>
+          <div style={{ marginTop: 16 }}>
+            <Btn onClick={() => onCreate(f, () => setForm(false))} disabled={creating}>
+              {creating ? "Enregistrement…" : "Ouvrir le dossier"}
+            </Btn>
+          </div>
+        </Card>
+      )}
+
+      {!dossiers.length ? (
+        <Card><div className="proc-empty">Aucun dossier ATM en cours. Bonne nouvelle — ou dossier oublié quelque part.</div></Card>
+      ) : (
+        <Card className="pad-0">
+          {dossiers.map(d => {
+            const e = atmEtat(d), p = atmProgression(d), j = atmJours(d.dateReception);
+            return (
+              <button key={d.id} className={`atm-row ${e.k}`} onClick={() => onOpen(d.id)}>
+                <span className="m">
+                  <span className="r">{d.sinistre} — {d.client}</span>
+                  <span className="s">
+                    {[d.marque, d.modele].filter(Boolean).join(" ")} · {d.typeSinistre}
+                    {j != null && ` · reçu il y a ${j} j`} · {d.magasinAccueil} → {d.magasinReparateur}
+                  </span>
+                </span>
+                <Chip status={e.c}>{e.l}</Chip>
+                <span className="mini">
+                  <span className="atm-bar"><i style={{ width: `${p}%` }} /></span>
+                  <span className="atm-bar-l">{d.etape?.split(" - ")[0] || "1"}/8 · {p} %</span>
+                </span>
+              </button>
+            );
+          })}
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function AtmDossier({ dossier, onBack, onPatch, onCloture, saving, saveError }) {
+  const [si, setSi] = useState(() => {
+    const idx = ATM_STEPS.findIndex(s => `${s.n} - ` === `${dossier.etape || ""}`.slice(0, `${s.n} - `.length));
+    return idx >= 0 ? idx : 0;
+  });
+  const s = ATM_STEPS[si];
+  const e = atmEtat(dossier);
+
+  const cocher = (k) => {
+    const checks = { ...dossier.checks, [k]: !dossier.checks?.[k] };
+    onPatch({ checks, branch: dossier.branch, etapeIdx: si });
+  };
+  const choisir = (b) => {
+    const branch = { ...dossier.branch, [si]: b };
+    onPatch({ checks: dossier.checks, branch, etapeIdx: si });
+  };
+  const aller = (i) => { if (i >= 0 && i < ATM_STEPS.length) { setSi(i); onPatch({ etapeIdx: i }); } };
+
+  const todo = (b, arr) => (
+    <ul className="atm-todo">
+      {arr.map(([t, sub], i) => {
+        const k = atmKey(si, b, i);
+        return (
+          <li key={k} className={dossier.checks?.[k] ? "on" : ""} onClick={() => cocher(k)}>
+            <span className="b" /><span className="t">{t}{sub && <em>{sub}</em>}</span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+
+  const lienAttestation = ATM_ATTESTATIONS[dossier.magasinAccueil] || ATM_ATTESTATIONS[dossier.magasinReparateur];
+
+  return (
+    <div className="stack">
+      <div className="ctx" style={{ justifyContent: "space-between", width: "100%" }}>
+        <div>
+          <Btn size="sm" variant="ghost" onClick={onBack}>← Dossiers</Btn>
+          <h1 className="h-screen" style={{ marginTop: 8 }}>{dossier.sinistre} — {dossier.client}</h1>
+          <p>
+            {[dossier.marque, dossier.modele].filter(Boolean).join(" ")} · IMEI {dossier.imei || "—"} ·
+            {" "}{dossier.typeSinistre} · {dossier.magasinAccueil} → {dossier.magasinReparateur}
+          </p>
+        </div>
+        <div style={{ textAlign: "right" }}>
+          <Chip status={e.c}>{e.l}</Chip>
+          <div className={`atm-save${saveError ? " ko" : ""}`} style={{ marginTop: 6 }}>
+            {saveError ? `Non enregistré — ${saveError}` : saving ? "Enregistrement…" : "Enregistré"}
+          </div>
+        </div>
+      </div>
+
+      <div className="atm-gold">
+        <b className="t">LES TROIS RÈGLES QU'ON NE DISCUTE PAS</b>
+        <ul>
+          <li><b>Aucune réparation avant l'accord écrit d'ATM.</b> Pas d'accord, pas de tournevis. Une pièce montée sans accord n'est jamais payée.</li>
+          <li><b>Une incohérence, c'est l'expertise interrompue.</b> IMEI qui ne correspond pas, sinistre déclaré « casse » et appareil oxydé : on arrête et on informe ATM.</li>
+          <li><b>La facture ne part jamais avec l'appareil.</b> Le client et le magasin reçoivent le bon d'intervention, pas la facture.</li>
+        </ul>
+      </div>
+
+      <div className="atm-wrap">
+        <div className="atm-rail">
+          {ATM_STEPS.map((st, i) => {
+            const fait = atmEtapeFaite(dossier, i);
+            return (
+              <button key={st.n} className={i === si ? "on" : ""} onClick={() => aller(i)}>
+                <span className={`n${fait ? " done" : ""}`}>{fait ? "✓" : st.n}</span>
+                <span className="l">{st.lbl}<span>{st.sub}</span></span>
+              </button>
+            );
+          })}
+        </div>
+
+        <Card>
+          <SectionHead>{s.titre}</SectionHead>
+          <p style={{ margin: "0 0 4px", fontSize: 11.5, fontWeight: 700, letterSpacing: ".04em",
+            textTransform: "uppercase", color: C.accent }}>{s.qui}</p>
+          <p style={{ color: C.gray600, fontSize: 13.5 }}>{s.intro}</p>
+
+          {s.kv && (
+            <div className="atm-kv">
+              {s.kv.map(([a, b]) => <div key={a}><span>{a}</span><span>{b}</span></div>)}
+            </div>
+          )}
+
+          {s.info && (
+            <div className="atm-branch" style={{ gridTemplateColumns: "1fr" }}>
+              {s.info.map(([t, d]) => (
+                <div key={t} className="atm-opt" style={{ cursor: "default" }}><b>{t}</b><span>{d}</span></div>
+              ))}
+            </div>
+          )}
+
+          {s.branch && (
+            <>
+              <p style={{ fontWeight: 700, fontSize: 13.5, marginTop: 18 }}>{s.branch.q}</p>
+              <div className="atm-branch">
+                {["a", "b"].map(k => (
+                  <button key={k} className={`atm-opt${dossier.branch?.[si] === k ? " on" : ""}`} onClick={() => choisir(k)}>
+                    <b>{s.branch[k].t}</b><span>{s.branch[k].d}</span>
+                  </button>
+                ))}
+              </div>
+              {dossier.branch?.[si]
+                ? todo(dossier.branch[si], dossier.branch[si] === "a" ? s.todoA : s.todoB)
+                : <p style={{ color: C.gray400, fontSize: 13 }}>Choisis un cas pour afficher la marche à suivre.</p>}
+            </>
+          )}
+
+          {s.todo && todo("x", s.todo)}
+          {s.note && <div className="atm-note"><b>À retenir — </b>{s.note}</div>}
+          {s.stop && <div className="atm-stop"><b>Point bloquant — </b>{s.stop}</div>}
+
+          {s.annexes && (
+            <>
+              <SectionHead>Les documents de ce dossier</SectionHead>
+              <div className="atm-annex">
+                {lienAttestation && (
+                  <a href={lienAttestation} target="_blank" rel="noreferrer">
+                    📄 Attestation de remise — {dossier.magasinAccueil}
+                  </a>
+                )}
+                <a href={ATM_DRIVE.expertise} target="_blank" rel="noreferrer">📄 Fiche Expertise &amp; Devis</a>
+                <a href={ATM_DRIVE.irrep} target="_blank" rel="noreferrer">📊 Trame irréparables</a>
+                <a href={ATM_DRIVE.process} target="_blank" rel="noreferrer">📄 Process complet ATM</a>
+              </div>
+              <p style={{ color: C.gray400, fontSize: 12.5 }}>
+                L'attestation proposée est celle du magasin d'accueil du client, pas du réparateur.
+              </p>
+            </>
+          )}
+
+          <div style={{ display: "flex", gap: 10, marginTop: 22, paddingTop: 16,
+            borderTop: "1px solid #EAE5E0", flexWrap: "wrap" }}>
+            <Btn variant="ghost" size="sm" onClick={() => aller(si - 1)} disabled={si === 0}>Étape précédente</Btn>
+            {si === ATM_STEPS.length - 1 ? (
+              <Btn size="sm" onClick={onCloture} disabled={!atmEtapeFaite(dossier, si)}>Clôturer le dossier</Btn>
+            ) : (
+              <Btn size="sm" onClick={() => aller(si + 1)}>Étape suivante</Btn>
+            )}
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [user, setUser] = useState(() => api.restore());
   const [page, setPage] = useState("dashboard");
@@ -2594,6 +3219,11 @@ export default function App() {
   const [actions, setActions] = useState([]);
   const [processList, setProcessList] = useState([]);
   const [processError, setProcessError] = useState("");
+  const [atm, setAtm] = useState(null);
+  const [atmError, setAtmError] = useState("");
+  const [atmOuvert, setAtmOuvert] = useState(null); // id du dossier consulté
+  const [atmSaving, setAtmSaving] = useState(false);
+  const [atmSaveError, setAtmSaveError] = useState("");
   const [lastLoaded, setLastLoaded] = useState(null);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -2620,10 +3250,10 @@ export default function App() {
 
   const loadAll = useCallback(async (refresh = false) => {
     if (refresh) setRefreshing(true); else setLoading(true);
-    setError(""); setGoatError(""); setVendorsError(""); setProcessError("");
+    setError(""); setGoatError(""); setVendorsError(""); setProcessError(""); setAtmError("");
     const q = refresh ? "?refresh=1" : "";
     try {
-      const [r, v, h, g, vd, ac, pc] = await Promise.all([
+      const [r, v, h, g, vd, ac, pc, at] = await Promise.all([
         api.get(`/api/results${q}`),
         // Une panne de la base Visites ne doit pas masquer les résultats.
         api.get(`/api/visits${q}`).catch(() => ({ visits: [] })),
@@ -2633,6 +3263,8 @@ export default function App() {
         api.get(`/api/actions${q}`).catch(() => ({ actions: [] })),
         // La bibliothèque de process ne doit jamais bloquer l'affichage des résultats.
         api.get(`/api/process${q}`).catch(e => { setProcessError(e.message || "lecture impossible"); return { process: [] }; }),
+        // Les dossiers ATM ne doivent jamais empêcher l'affichage des résultats.
+        api.get(`/api/atm${q}`).catch(e => { setAtmError(e.message || "lecture impossible"); return null; }),
       ]);
       setResults(cleanNotionText(r));
       setVisits(v.visits);
@@ -2641,6 +3273,7 @@ export default function App() {
       setVendors(vd?.vendors || null);
       setActions(ac?.actions || []);
       setProcessList(pc?.process || []);
+      setAtm(at);
       setLastLoaded(Date.now());
       setServerState("ok");
     } catch (e) {
@@ -2657,7 +3290,72 @@ export default function App() {
     api.logout(); setUser(null);
     setResults(null); setVisits(null); setHistory(null); setGoatData(null);
     setVendors(null); setActions([]); setProcessList([]); setLastLoaded(null);
+    setAtm(null); setAtmOuvert(null); setAtmSaveError("");
   };
+
+  // ─── Écritures ATM ─────────────────────────────────────────────────────────
+  // Le serveur reste la source de vérité : après chaque écriture, on relit la
+  // liste plutôt que de recalculer un statut côté navigateur. Le cache est
+  // invalidé côté backend, la relecture est donc immédiate.
+  const rechargerAtm = useCallback(async () => {
+    try {
+      setAtm(await api.get("/api/atm"));
+      setAtmSaveError("");
+    } catch (e) {
+      if (e.code === "auth") { setUser(null); return; }
+      setAtmSaveError(e.message);
+    }
+  }, []);
+
+  const majDossierLocal = (id, patch) =>
+    setAtm(a => a && ({ ...a, dossiers: a.dossiers.map(d => d.id === id ? { ...d, ...patch } : d) }));
+
+  const patchDossier = useCallback(async (id, body) => {
+    // Mise à jour optimiste : cocher une case doit répondre à l'instant, pas
+    // après un aller-retour Notion. Le serveur corrige au retour.
+    majDossierLocal(id, body);
+    setAtmSaving(true); setAtmSaveError("");
+    try {
+      await api.patch(`/api/atm/${id}`, body);
+      await rechargerAtm();
+    } catch (e) {
+      if (e.code === "auth") { setUser(null); return; }
+      setAtmSaveError(e.message);
+      await rechargerAtm();
+    } finally { setAtmSaving(false); }
+  }, [rechargerAtm]);
+
+  const creerDossier = useCallback(async (body, onDone) => {
+    setAtmSaving(true); setAtmSaveError("");
+    try {
+      const d = await api.post("/api/atm", body);
+      await rechargerAtm();
+      onDone?.();
+      setAtmOuvert(d.id);
+    } catch (e) {
+      if (e.code === "auth") { setUser(null); return; }
+      setAtmSaveError(e.message);
+      alert(e.message);
+    } finally { setAtmSaving(false); }
+  }, [rechargerAtm]);
+
+  const cloturerDossier = useCallback(async (id, sinistre) => {
+    if (!window.confirm(
+      `Clôturer le dossier ${sinistre} ?\n\n` +
+      `Il sort de la liste des dossiers en cours. La ligne reste archivée dans Notion ` +
+      `avec la date de remise au client.`
+    )) return;
+    setAtmSaving(true);
+    try {
+      await api.post(`/api/atm/${id}/cloture`, {});
+      setAtmOuvert(null);
+      await rechargerAtm();
+    } catch (e) {
+      if (e.code === "auth") { setUser(null); return; }
+      setAtmSaveError(e.message);
+      alert(e.message);
+    } finally { setAtmSaving(false); }
+  }, [rechargerAtm]);
 
   const openStore = (store) => { setSelectedStore(store); setPage("store"); setMenuOpen(false); };
   const goTo = (id) => {
@@ -2673,17 +3371,38 @@ export default function App() {
 
   if (!user) return <><Styles /><LoginScreen serverState={serverState} onRetryPing={checkServer} onLogin={(u) => { setUser(u); setPage("dashboard"); }} /></>;
 
-  const nav = [
-    { id: "dashboard", label: "Vue d'ensemble" },
-    { id: "store",     label: "Magasins" },
-    { id: "results",   label: "Résultats" },
-    { id: "history",   label: "Historique" },
-    { id: "goat",      label: "GOAT" },
-    { id: "guide",     label: "Guide Mobileo" },
-    { id: "process",   label: "Process" },
-    { id: "visits",    label: "Visites" },
+  // ─── Navigation à deux niveaux ─────────────────────────────────────────────
+  // Dix écrans à plat, sur un téléphone, c'est une barre qui défile et la moitié
+  // de l'app qu'on n'ouvre jamais. Trois familles, trois questions différentes.
+  // L'ordre change selon le compte : un technicien ouvre l'app pour FAIRE
+  // quelque chose, le responsable de zone pour REGARDER.
+  const FAMILLES = [
+    { id: "pilot", label: "Piloter", hint: "Les chiffres de la zone", ecrans: [
+        { id: "dashboard", label: "Vue d'ensemble" },
+        { id: "store",     label: "Magasins" },
+        { id: "results",   label: "Résultats" },
+        { id: "history",   label: "Historique" },
+      ] },
+    { id: "anim", label: "Animer", hint: "Les équipes", ecrans: [
+        { id: "goat",   label: "GOAT" },
+        { id: "visits", label: "Visites" },
+      ] },
+    { id: "comptoir", label: "Au comptoir", hint: "Les outils du quotidien", ecrans: [
+        { id: "atm",     label: "Sinistre ATM" },
+        { id: "process", label: "Process" },
+        { id: "guide",   label: "Guide Mobileo" },
+      ] },
   ];
-  const navActive = page;
+  const famillesOrdonnees = user.role === "rz"
+    ? FAMILLES
+    : [FAMILLES[2], FAMILLES[1], FAMILLES[0]];
+  const familleDe = (p) => (FAMILLES.find(f => f.ecrans.some(e => e.id === p)) || FAMILLES[0]).id;
+  const familleActive = familleDe(page);
+  const ecransFamille = (FAMILLES.find(f => f.id === familleActive) || FAMILLES[0]);
+  const ouvrirFamille = (fid) => {
+    const f = FAMILLES.find(x => x.id === fid);
+    if (f) goTo(f.ecrans[0].id);
+  };
   const dataStamp = results?.updated
     ? `Données au ${results.updated}`
     : lastLoaded ? `Données ${stampLabel(lastLoaded)}` : "—";
@@ -2699,8 +3418,8 @@ export default function App() {
         </div>
 
         <div className="nav-links">
-          {nav.map(({ id, label }) => (
-            <button key={id} className={navActive === id ? "on" : ""} onClick={() => goTo(id)}>{label}</button>
+          {famillesOrdonnees.map(({ id, label }) => (
+            <button key={id} className={familleActive === id ? "on" : ""} onClick={() => ouvrirFamille(id)}>{label}</button>
           ))}
         </div>
 
@@ -2728,9 +3447,23 @@ export default function App() {
             {dataStamp}
           </div>
         </div>
-        {nav.map(({ id, label }) => (
-          <button key={id} className={navActive === id ? "on" : ""} onClick={() => goTo(id)}>{label}</button>
+        {famillesOrdonnees.map(f => (
+          <div key={f.id}>
+            <div className="nav-mobile-fam">{f.label}</div>
+            {f.ecrans.map(({ id, label }) => (
+              <button key={id} className={page === id ? "on" : ""} onClick={() => goTo(id)}>{label}</button>
+            ))}
+          </div>
         ))}
+      </div>
+
+      <div className="nav2">
+        <div className="nav2-in">
+          <span className="nav2-hint">{ecransFamille.hint}</span>
+          {ecransFamille.ecrans.map(({ id, label }) => (
+            <button key={id} className={page === id ? "on" : ""} onClick={() => goTo(id)}>{label}</button>
+          ))}
+        </div>
       </div>
 
       <main>
@@ -2746,7 +3479,29 @@ export default function App() {
               <Spinner label={serverState === "waking" ? "Réveil du serveur, patiente une minute…" : "Lecture des données Notion…"} />
             ) : (
               <>
-                {page === "dashboard" && results && <Dashboard user={user} data={results} onOpenStore={openStore} />}
+                {page === "dashboard" && results && (
+                  <>
+                    <AtmAlerts atm={atm} onOpen={() => goTo("atm")} />
+                    <Dashboard user={user} data={results} onOpenStore={openStore} />
+                  </>
+                )}
+                {page === "atm" && (
+                  atmOuvert && atm?.dossiers?.some(d => d.id === atmOuvert) ? (
+                    <AtmDossier
+                      dossier={atm.dossiers.find(d => d.id === atmOuvert)}
+                      saving={atmSaving}
+                      saveError={atmSaveError}
+                      onBack={() => setAtmOuvert(null)}
+                      onPatch={(body) => patchDossier(atmOuvert, body)}
+                      onCloture={() => cloturerDossier(atmOuvert, atm.dossiers.find(d => d.id === atmOuvert)?.sinistre)}
+                    />
+                  ) : (
+                    <AtmListe
+                      user={user} atm={atm} error={atmError} creating={atmSaving}
+                      onOpen={setAtmOuvert} onCreate={creerDossier}
+                    />
+                  )
+                )}
                 {page === "results" && results && (
                   <ResultsPage user={user} data={results} vendors={vendors} vendorsError={vendorsError} mois={mois}
                     onRefresh={() => loadAll(true)} refreshing={refreshing} onOpenStore={openStore} />
