@@ -614,6 +614,37 @@ table.tbl tr.clickable:hover td{background:var(--brand-wash)}
   .guide-row{flex-direction:column;gap:3px}
   .guide-row .k{min-width:0}
 }
+/* ══════════════════════════════════════════════════════════════════════════
+   Process — bibliothèque documentaire
+   ══════════════════════════════════════════════════════════════════════════ */
+.proc-tools{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.proc-search{flex:1;min-width:220px;padding:11px 14px;border:1px solid var(--line);
+  border-radius:10px;font:inherit;font-size:14px;background:var(--surface);color:var(--ink)}
+.proc-search:focus{outline:2px solid var(--brand);outline-offset:-1px;border-color:transparent}
+.proc-row{display:flex;align-items:center;gap:13px;padding:12px 0;border-bottom:1px solid var(--line-2)}
+.proc-row:last-child{border-bottom:none}
+.proc-fmt{font-size:10px;font-weight:800;letter-spacing:.04em;padding:4px 7px;border-radius:6px;
+  width:46px;text-align:center;flex-shrink:0}
+.proc-fmt.pdf{background:#F7EAE9;color:#A02724}
+.proc-fmt.word{background:#E8EEF7;color:#2A5C93}
+.proc-main{flex:1;min-width:0}
+.proc-title{font-size:13.5px;font-weight:700;line-height:1.35}
+.proc-meta{font-size:11.5px;color:var(--muted);font-weight:600;margin-top:2px}
+.proc-note{font-size:11.5px;color:var(--sub);margin-top:3px;line-height:1.45}
+.proc-tag{display:inline-block;font-size:9.5px;font-weight:800;letter-spacing:.03em;
+  padding:3px 7px;border-radius:6px;margin-left:7px;vertical-align:1px}
+.proc-tag.new{background:#EAF3EE;color:#2E7D53}
+.proc-tag.old{background:#FBF0D8;color:#B4881B}
+.proc-tag.off{background:#F0EDEA;color:#5A544E}
+.proc-tag.ext{background:#F0EBF7;color:#7A5AA6}
+.proc-empty{padding:26px 20px;text-align:center;color:var(--muted);font-size:13px;font-weight:600}
+@media(max-width:768px){
+  .proc-row{flex-wrap:wrap;gap:8px}
+  .proc-fmt{order:1}
+  .proc-main{flex:1 1 100%;order:2}
+  .proc-row .btn{order:3;margin-left:auto}
+}
+
 `;
 // __STYLES_END__
 
@@ -2394,6 +2425,160 @@ function GuidePage() {
 }
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
+
+// ─── PROCESS — bibliothèque documentaire ──────────────────────────────────────
+// Même logique d'accordéon que le guide Mobileo : replié par défaut, un geste
+// pour ouvrir. Les fichiers restent dans le Drive, l'app ne fait que les lister
+// à partir de la base Notion « Process ». La recherche vient en premier : en
+// magasin on ne cherche pas un thème, on cherche un mot.
+const PROCESS_META = {
+  "Réparation & atelier": { icon: "🔧", c: "#3E6FB0", wash: "#E8EEF7", hint: "Pièces, rebus, atelier" },
+  "Occasion & reprise":   { icon: "📱", c: "#2E7D53", wash: "#EAF3EE", hint: "Reprise, grading, commandes" },
+  "Brokers":              { icon: "🤝", c: "#7A5AA6", wash: "#F0EBF7", hint: "Partenaires grands comptes" },
+  "Ventes & partenaires": { icon: "🛒", c: "#E8612C", wash: "#FDEEE7", hint: "Forfaits, box, assurances" },
+  "SAV & administratif":  { icon: "🛡️", c: "#C98A00", wash: "#FBF0D8", hint: "Garanties, facturation" },
+};
+const PROCESS_THEMES = Object.keys(PROCESS_META);
+
+const MOIS_COURTS = ["janv.","févr.","mars","avril","mai","juin","juil.","août","sept.","oct.","nov.","déc."];
+function dateProcess(iso) {
+  if (!iso) return "date inconnue";
+  const d = new Date(iso);
+  if (isNaN(d)) return "date inconnue";
+  return `${d.getDate()} ${MOIS_COURTS[d.getMonth()]} ${d.getFullYear()}`;
+}
+function joursDepuis(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d)) return null;
+  return (Date.now() - d.getTime()) / 86400000;
+}
+
+function ProcessPage({ user, items, error, onRefresh, refreshing }) {
+  const [q, setQ] = useState("");
+  const [ouverts, setOuverts] = useState(() => new Set());
+  const estRZ = user.role === "rz";
+
+  const bascule = (t) => setOuverts(prev => {
+    const n = new Set(prev);
+    n.has(t) ? n.delete(t) : n.add(t);
+    return n;
+  });
+
+  const recherche = q.trim().toLowerCase();
+  const liste = (items || []).filter(p =>
+    !recherche || `${p.title} ${p.theme} ${p.note || ""}`.toLowerCase().includes(recherche));
+
+  // Une recherche en cours déplie tout : on veut voir les résultats, pas des titres fermés.
+  const themes = PROCESS_THEMES
+    .map(t => ({ t, rows: liste.filter(p => p.theme === t) }))
+    .filter(g => g.rows.length);
+  const autres = liste.filter(p => !PROCESS_THEMES.includes(p.theme));
+  if (autres.length) themes.push({ t: "Autres", rows: autres });
+
+  const vieux = (items || []).filter(p => (joursDepuis(p.updated) ?? 0) > 730).length;
+
+  if (error) {
+    return (
+      <div className="stack">
+        <h1 className="h-screen">Process</h1>
+        <ErrorBanner message={error} onRetry={onRefresh} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="stack">
+      <div className="ctx" style={{ justifyContent: "space-between", width: "100%" }}>
+        <div>
+          <h1 className="h-screen">Process</h1>
+          <p>
+            {(items || []).length} process · classés par thème · les documents restent dans le Drive
+            {estRZ && vieux > 0 && ` · ${vieux} de plus de deux ans`}
+          </p>
+        </div>
+        {estRZ && onRefresh && (
+          <Btn size="sm" variant="ghost" onClick={onRefresh} disabled={refreshing}>
+            {refreshing ? "Lecture…" : "Rafraîchir"}
+          </Btn>
+        )}
+      </div>
+
+      <div className="proc-tools">
+        <input
+          className="proc-search"
+          type="search"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Rechercher un process (ex : rebus, acompte, Karapass…)"
+        />
+      </div>
+
+      {!items?.length ? (
+        <Card><div className="proc-empty">Aucun process n'est publié pour le moment.</div></Card>
+      ) : !themes.length ? (
+        <Card><div className="proc-empty">Aucun process ne correspond à cette recherche.</div></Card>
+      ) : (
+        <Card className="pad-0">
+          {themes.map(({ t, rows }) => {
+            const meta = PROCESS_META[t] || { icon: "📄", c: C.gray600, wash: C.gray50, hint: "" };
+            const open = recherche ? true : ouverts.has(t);
+            return (
+              <div key={t} className={`acc${open ? " open" : ""}`} style={{ "--acc-c": meta.c, "--acc-wash": meta.wash }}>
+                <button className="acc-head" onClick={() => bascule(t)} aria-expanded={open}>
+                  <span className="acc-ico">{meta.icon}</span>
+                  <span className="acc-title">
+                    <b>{t}</b>
+                    {meta.hint && <span>{meta.hint}</span>}
+                  </span>
+                  <span className="acc-num">{rows.length}</span>
+                  <span className="acc-chev">▶</span>
+                </button>
+                <div className="acc-body">
+                  <div className="acc-inner">
+                    <div>
+                      {rows.map(p => <ProcessRow key={p.id} p={p} estRZ={estRZ} />)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function ProcessRow({ p, estRZ }) {
+  const j = joursDepuis(p.updated);
+  const nouveau = j != null && j <= 30;
+  const aRevoir = j != null && j > 730;
+  const fmt = (p.format || "PDF").toLowerCase() === "word" ? "word" : "pdf";
+  return (
+    <div className="proc-row">
+      <span className={`proc-fmt ${fmt}`}>{fmt === "word" ? "WORD" : "PDF"}</span>
+      <div className="proc-main">
+        <div className="proc-title">
+          {p.title}
+          {nouveau && <span className="proc-tag new">NOUVEAU</span>}
+          {!nouveau && aRevoir && estRZ && <span className="proc-tag old">À REVOIR</span>}
+          {p.audience === "Public externe" && <span className="proc-tag ext">PUBLIC EXTERNE</span>}
+          {estRZ && !p.published && <span className="proc-tag off">NON PUBLIÉ</span>}
+        </div>
+        <div className="proc-meta">
+          Mis à jour le {dateProcess(p.updated)}
+          {p.audience && p.audience !== "Tous" && p.audience !== "Public externe" && ` · ${p.audience}`}
+        </div>
+        {estRZ && p.note && <div className="proc-note">{p.note}</div>}
+      </div>
+      {p.url
+        ? <a className="btn btn-primary btn-sm" href={p.url} target="_blank" rel="noreferrer">Ouvrir</a>
+        : <span className="proc-tag off">Lien manquant</span>}
+    </div>
+  );
+}
+
 export default function App() {
   const [user, setUser] = useState(() => api.restore());
   const [page, setPage] = useState("dashboard");
@@ -2407,6 +2592,8 @@ export default function App() {
   const [vendors, setVendors] = useState(null);
   const [vendorsError, setVendorsError] = useState("");
   const [actions, setActions] = useState([]);
+  const [processList, setProcessList] = useState([]);
+  const [processError, setProcessError] = useState("");
   const [lastLoaded, setLastLoaded] = useState(null);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -2433,10 +2620,10 @@ export default function App() {
 
   const loadAll = useCallback(async (refresh = false) => {
     if (refresh) setRefreshing(true); else setLoading(true);
-    setError(""); setGoatError(""); setVendorsError("");
+    setError(""); setGoatError(""); setVendorsError(""); setProcessError("");
     const q = refresh ? "?refresh=1" : "";
     try {
-      const [r, v, h, g, vd, ac] = await Promise.all([
+      const [r, v, h, g, vd, ac, pc] = await Promise.all([
         api.get(`/api/results${q}`),
         // Une panne de la base Visites ne doit pas masquer les résultats.
         api.get(`/api/visits${q}`).catch(() => ({ visits: [] })),
@@ -2444,6 +2631,8 @@ export default function App() {
         api.get(`/api/goat${q}`).catch(e => { setGoatError(e.message || "lecture impossible"); return null; }),
         api.get(`/api/vendors${q}`).catch(e => { setVendorsError(e.message || "endpoint indisponible"); return null; }),
         api.get(`/api/actions${q}`).catch(() => ({ actions: [] })),
+        // La bibliothèque de process ne doit jamais bloquer l'affichage des résultats.
+        api.get(`/api/process${q}`).catch(e => { setProcessError(e.message || "lecture impossible"); return { process: [] }; }),
       ]);
       setResults(cleanNotionText(r));
       setVisits(v.visits);
@@ -2451,6 +2640,7 @@ export default function App() {
       setGoatData(g);
       setVendors(vd?.vendors || null);
       setActions(ac?.actions || []);
+      setProcessList(pc?.process || []);
       setLastLoaded(Date.now());
       setServerState("ok");
     } catch (e) {
@@ -2466,7 +2656,7 @@ export default function App() {
   const signOut = () => {
     api.logout(); setUser(null);
     setResults(null); setVisits(null); setHistory(null); setGoatData(null);
-    setVendors(null); setActions([]); setLastLoaded(null);
+    setVendors(null); setActions([]); setProcessList([]); setLastLoaded(null);
   };
 
   const openStore = (store) => { setSelectedStore(store); setPage("store"); setMenuOpen(false); };
@@ -2490,6 +2680,7 @@ export default function App() {
     { id: "history",   label: "Historique" },
     { id: "goat",      label: "GOAT" },
     { id: "guide",     label: "Guide Mobileo" },
+    { id: "process",   label: "Process" },
     { id: "visits",    label: "Visites" },
   ];
   const navActive = page;
@@ -2567,6 +2758,10 @@ export default function App() {
                 {page === "history" && <HistoryPage user={user} history={history} />}
                 {page === "goat"    && <GoatPage user={user} goatData={goatData} goatError={goatError} lastLoaded={lastLoaded} onRefresh={() => loadAll(true)} refreshing={refreshing} />}
                 {page === "visits"  && <VisitsPage user={user} visits={visits} />}
+                {page === "process" && (
+                  <ProcessPage user={user} items={processList} error={processError}
+                    onRefresh={() => loadAll(true)} refreshing={refreshing} />
+                )}
                 {!results && !error && <Spinner />}
               </>
             )}
