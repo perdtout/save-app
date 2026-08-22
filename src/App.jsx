@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import logoRepairMobile from "./RepairMobile.png";
+import Alternance from "./Alternance.jsx";
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  CONFIGURATION
@@ -3386,6 +3387,7 @@ export default function App() {
     { id: "anim", label: "Animer", hint: "Les équipes", ecrans: [
         { id: "goat",   label: "GOAT" },
         { id: "visits", label: "Visites" },
+      { id: "alternance", label: "Alternance" },
       ] },
     { id: "comptoir", label: "Au comptoir", hint: "Les outils du quotidien", ecrans: [
         { id: "atm",     label: "Sinistre ATM" },
@@ -3513,6 +3515,7 @@ export default function App() {
                 {page === "history" && <HistoryPage user={user} history={history} />}
                 {page === "goat"    && <GoatPage user={user} goatData={goatData} goatError={goatError} lastLoaded={lastLoaded} onRefresh={() => loadAll(true)} refreshing={refreshing} />}
                 {page === "visits"  && <VisitsPage user={user} visits={visits} />}
+                {page === "alternance" && <Alternance api={api} user={user} />}
                 {page === "process" && (
                   <ProcessPage user={user} items={processList} error={processError}
                     onRefresh={() => loadAll(true)} refreshing={refreshing} />
