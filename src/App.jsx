@@ -1879,251 +1879,6 @@ function TrendChart({ points, target, suffix = "", isVolume = false, mois }) {
   );
 }
 
-// ─── ÉCRAN HISTORIQUE ─────────────────────────────────────────────────────────
-function HistoryPage({ user, history }) {
-  const isRZ = user.role === "rz";
-  const stores = isRZ ? STORES_ORDER : [user.store];
-  const [vue, setVue] = useState("courbes");
-  const [kpi, setKpi] = useState("acc");
-  const [magasin, setMagasin] = useState("all");
-  const [moisSel, setMoisSel] = useState(null);
-  const [storeTab, setStoreTab] = useState(stores[0]);
-
-  const MOIS_FR = { "01": "Janv.", "02": "Févr.", "03": "Mars", "04": "Avr.", "05": "Mai", "06": "Juin",
-                    "07": "Juil.", "08": "Août", "09": "Sept.", "10": "Oct.", "11": "Nov.", "12": "Déc." };
-  const moisLabel = (k) => { if (!k) return "—"; const [y, m] = k.split("-"); return `${MOIS_FR[m] || m} ${y}`; };
-
-  const byStoreMois = {};
-  for (const [store, rows] of Object.entries(history?.byStore || {})) {
-    byStoreMois[store] = {};
-    for (const row of (Array.isArray(rows) ? rows : [])) if (row.mois) byStoreMois[store][row.mois] = row;
-  }
-  const allMonths = (history?.months || []).slice().sort();
-
-  if (!allMonths.length) {
-    return (
-      <div className="stack">
-        <h1 className="h-screen">Historique mensuel</h1>
-        <Card><div className="empty">Pas encore d'historique mensuel disponible dans Notion.</div></Card>
-      </div>
-    );
-  }
-
-  const KPIS = [
-    { id: "acc",     label: "Ratio accessoires", champ: "accessoires", suffix: " %", target: ACC_OBJ },
-    { id: "gp",      label: "Ratio GP",          champ: "gp",          suffix: " %", target: GP_OBJ },
-    { id: "occ",     label: "Mobiles d'occasion", champ: "occasion",   suffix: "",   volume: true },
-    { id: "mobileo", label: "Forfaits Mobileo",  champ: "mobileo",     suffix: "",   volume: true, target: MOBILEO_OBJ },
-    { id: "atm",     label: "Ratio ATM",         champ: "atm",         suffix: " %", target: ATM_OBJ },
-  ];
-  const k = KPIS.find(x => x.id === kpi);
-  const cible = (store) => kpi === "occ" ? (OCC_OBJ[store] ?? null) : (k.target ?? null);
-
-  const serie = (store) => allMonths.map(m => ({ mois: m, value: byStoreMois[store]?.[m]?.[k.champ] ?? null }));
-  const derniere = (store) => {
-    const s = serie(store).filter(p => p.value != null);
-    return s.length ? s[s.length - 1].value : null;
-  };
-
-  const magasinsAffiches = magasin === "all" ? stores : [magasin];
-
-  const evo = (a, b) => (a == null || b == null || b === 0) ? null : +(((a - b) / Math.abs(b)) * 100).toFixed(1);
-  const EvoChip = ({ pct }) => pct == null
-    ? <span className="txt-muted">—</span>
-    : <span className={`trend ${pct > 0 ? "t-up" : pct < 0 ? "t-down" : "t-flat"}`}>
-        {pct > 0 ? "▲" : pct < 0 ? "▼" : "▬"} {Math.abs(pct).toLocaleString("fr-FR")} %
-      </span>;
-
-  const COLS = [
-    { key: "margeTotale",      label: "Marge",        fmt: eur },
-    { key: "accessoires",      label: "Acc.",         fmt: v => pct(v),  obj: ACC_OBJ },
-    { key: "margeAccessoires", label: "dont acc.",    fmt: eur },
-    { key: "gp",               label: "GP",           fmt: v => pct(v),  obj: GP_OBJ },
-    { key: "margeGP",          label: "dont GP",      fmt: eur },
-    { key: "occasion",         label: "Occasion",     fmt: v => v ?? "—" },
-    { key: "mobileo",          label: "Mobileo",      fmt: v => v ?? "—" },
-  ];
-  const val = (store, m, key) => byStoreMois[store]?.[m]?.[key] ?? null;
-
-  const moisEffectif = moisSel || allMonths[allMonths.length - 1];
-
-  return (
-    <div className="stack">
-      <div className="ctx">
-        <h1 className="h-screen">Historique</h1>
-        <p>{allMonths.length} mois · {moisLabel(allMonths[0])} → {moisLabel(allMonths[allMonths.length - 1])}</p>
-      </div>
-
-      <div className="seg">
-        <button className={vue === "courbes" ? "on" : ""} onClick={() => setVue("courbes")}>Tendances</button>
-        <button className={vue === "comparaison" ? "on" : ""} onClick={() => setVue("comparaison")}>Comparaison N / N-1</button>
-        <button className={vue === "tableau" ? "on" : ""} onClick={() => setVue("tableau")}>Tableau complet</button>
-      </div>
-
-      {vue === "courbes" && (
-        <>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-            <select className="select" value={kpi} onChange={e => setKpi(e.target.value)}>
-              {KPIS.map(x => <option key={x.id} value={x.id}>{x.label}</option>)}
-            </select>
-            {isRZ && (
-              <select className="select" value={magasin} onChange={e => setMagasin(e.target.value)}>
-                <option value="all">Les 5 magasins</option>
-                {STORES_ORDER.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            )}
-            <span className="meta">
-              {k.target || kpi === "occ" ? "Ligne grise = objectif" : "Aucun objectif fixé sur cet indicateur"}
-              {k.volume ? " · pointillé = projection de fin de mois" : ""}
-            </span>
-          </div>
-
-          <div className="grid" style={{ gridTemplateColumns: magasinsAffiches.length === 1
-            ? "1fr" : "repeat(auto-fit,minmax(330px,1fr))" }}>
-            {magasinsAffiches.map(store => {
-              const pts = serie(store);
-              const t = cible(store);
-              const derniereVal = derniere(store);
-              const statut = t != null ? statusFor(derniereVal, t) : "neutral";
-              const an = analyzeSeries(pts.filter(p => !estMoisEnCours(p.mois)),
-                { suffix: k.suffix, target: t, higherIsBetter: true });
-              return (
-                <Card key={store}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 4 }}>
-                    <div>
-                      <h3 className="h-section" style={{ margin: 0 }}>{store}</h3>
-                      <span className="meta">{k.label}</span>
-                    </div>
-                    <Chip status={statut}>
-                      {derniereVal != null
-                        ? `${Number(derniereVal).toLocaleString("fr-FR", { maximumFractionDigits: 1 })}${k.suffix}`
-                        : "—"}
-                    </Chip>
-                  </div>
-                  {an && (
-                    <p style={{ margin: "6px 0 10px", fontSize: 12.5, lineHeight: 1.55, color: an.couleur }}>{an.phrase}</p>
-                  )}
-                  <TrendChart points={pts} target={t} suffix={k.suffix} isVolume={!!k.volume} />
-                </Card>
-              );
-            })}
-          </div>
-        </>
-      )}
-
-      {vue === "comparaison" && (() => {
-        const [y, mm] = moisEffectif.split("-");
-        const n = moisEffectif, n1 = `${+y - 1}-${mm}`, n2 = `${+y - 2}-${mm}`;
-        return (
-          <>
-            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-              <select className="select" value={moisEffectif} onChange={e => setMoisSel(e.target.value)}>
-                {allMonths.slice().reverse().map(m => <option key={m} value={m}>{moisLabel(m)}</option>)}
-              </select>
-              <span className="meta">{moisLabel(n)} comparé à {moisLabel(n1)} et {moisLabel(n2)}</span>
-            </div>
-            {!allMonths.includes(n1) && (
-              <Card accent={C.accent}>
-                <div className="note" style={{ margin: 0 }}>
-                  Aucune donnée pour <b>{moisLabel(n1)}</b> : l'historique Notion démarre en {moisLabel(allMonths[0])}.
-                  La comparaison année sur année deviendra possible à partir de {moisLabel(`${+allMonths[0].split("-")[0] + 1}-${allMonths[0].split("-")[1]}`)}.
-                </div>
-              </Card>
-            )}
-            {stores.map(store => (
-              <Card key={store}>
-                <SectionHead>{store}</SectionHead>
-                <div className="tbl-wrap">
-                  <table className="tbl">
-                    <thead><tr>
-                      <th>Indicateur</th>
-                      <th className="r">{moisLabel(n)}</th><th className="c">vs N-1</th>
-                      <th className="r">{moisLabel(n1)}</th><th className="c">vs N-2</th>
-                      <th className="r">{moisLabel(n2)}</th>
-                    </tr></thead>
-                    <tbody>
-                      {COLS.map(c => {
-                        const vN = val(store, n, c.key), vN1 = val(store, n1, c.key), vN2 = val(store, n2, c.key);
-                        return (
-                          <tr key={c.key}>
-                            <td className="name">{c.label}</td>
-                            <td className="r"><span className={c.obj ? `txt-${statusFor(vN, c.obj)}` : ""}
-                              style={{ fontWeight: 700 }}>{c.fmt(vN)}</span></td>
-                            <td className="c"><EvoChip pct={evo(vN, vN1)} /></td>
-                            <td className="r txt-muted">{c.fmt(vN1)}</td>
-                            <td className="c"><EvoChip pct={evo(vN, vN2)} /></td>
-                            <td className="r txt-muted">{c.fmt(vN2)}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="mcards">
-                  {COLS.map(c => {
-                    const vN = val(store, n, c.key), vN1 = val(store, n1, c.key);
-                    return (
-                      <div className="mrow" key={c.key}>
-                        <span>{c.label}</span>
-                        <b>{c.fmt(vN)} <span style={{ fontWeight: 400 }}><EvoChip pct={evo(vN, vN1)} /></span></b>
-                      </div>
-                    );
-                  })}
-                </div>
-              </Card>
-            ))}
-          </>
-        );
-      })()}
-
-      {vue === "tableau" && (
-        <>
-          {isRZ && (
-            <div className="seg">
-              {stores.map(s => (
-                <button key={s} className={storeTab === s ? "on" : ""} onClick={() => setStoreTab(s)}>{s}</button>
-              ))}
-            </div>
-          )}
-          <Card>
-            <SectionHead>{isRZ ? storeTab : user.store} — mois par mois</SectionHead>
-            <div className="tbl-wrap">
-              <table className="tbl">
-                <thead><tr>
-                  <th>Mois</th><th className="r">Marge</th><th className="c">Évol.</th>
-                  <th className="r">Acc.</th><th className="r">GP</th>
-                  <th className="r">Occasion</th><th className="r">Mobileo</th>
-                </tr></thead>
-                <tbody>
-                  {Object.keys(byStoreMois[isRZ ? storeTab : user.store] || {}).sort().reverse().map((m, i, arr) => {
-                    const st = isRZ ? storeTab : user.store;
-                    const r = byStoreMois[st]?.[m] || {};
-                    const prev = arr[i + 1] ? byStoreMois[st]?.[arr[i + 1]] : null;
-                    return (
-                      <tr key={m}>
-                        <td className="name">{moisLabel(m)}</td>
-                        <td className="r" style={{ fontWeight: 700 }}>{eur(r.margeTotale)}</td>
-                        <td className="c"><EvoChip pct={prev ? evo(r.margeTotale, prev.margeTotale) : null} /></td>
-                        <td className={`r txt-${statusFor(r.accessoires, ACC_OBJ)}`} style={{ fontWeight: 700 }}>{pct(r.accessoires)}</td>
-                        <td className={`r txt-${statusFor(r.gp, GP_OBJ)}`} style={{ fontWeight: 700 }}>{pct(r.gp)}</td>
-                        <td className="r">{r.occasion ?? "—"}</td>
-                        <td className="r">{r.mobileo ?? "—"}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <p className="note">
-              Vert : objectif atteint (accessoires ≥ {ACC_OBJ} %, GP ≥ {GP_OBJ} %) · ambre : sous l'objectif de moins de 15 % · brique : en dessous.
-            </p>
-          </Card>
-        </>
-      )}
-    </div>
-  );
-}
-
 // ─── GOAT — composants visuels ────────────────────────────────────────────────
 // ─── GOAT — composants ────────────────────────────────────────────────────────
 // Le score sur 100 se décompose en Accessoires (25), GP (25), Mobileo (30) et
@@ -3212,7 +2967,6 @@ export default function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [results, setResults] = useState(null);
   const [visits, setVisits] = useState(null);
-  const [history, setHistory] = useState(null);
   const [goatData, setGoatData] = useState(null);
   const [goatError, setGoatError] = useState("");
   const [vendors, setVendors] = useState(null);
@@ -3254,11 +3008,10 @@ export default function App() {
     setError(""); setGoatError(""); setVendorsError(""); setProcessError(""); setAtmError("");
     const q = refresh ? "?refresh=1" : "";
     try {
-      const [r, v, h, g, vd, ac, pc, at] = await Promise.all([
+      const [r, v, g, vd, ac, pc, at] = await Promise.all([
         api.get(`/api/results${q}`),
         // Une panne de la base Visites ne doit pas masquer les résultats.
         api.get(`/api/visits${q}`).catch(() => ({ visits: [] })),
-        api.get(`/api/history${q}`).catch(() => ({ months: [], byStore: {} })),
         api.get(`/api/goat${q}`).catch(e => { setGoatError(e.message || "lecture impossible"); return null; }),
         api.get(`/api/vendors${q}`).catch(e => { setVendorsError(e.message || "endpoint indisponible"); return null; }),
         api.get(`/api/actions${q}`).catch(() => ({ actions: [] })),
@@ -3269,7 +3022,6 @@ export default function App() {
       ]);
       setResults(cleanNotionText(r));
       setVisits(v.visits);
-      setHistory(h);
       setGoatData(g);
       setVendors(vd?.vendors || null);
       setActions(ac?.actions || []);
@@ -3289,7 +3041,7 @@ export default function App() {
 
   const signOut = () => {
     api.logout(); setUser(null);
-    setResults(null); setVisits(null); setHistory(null); setGoatData(null);
+    setResults(null); setVisits(null); setGoatData(null);
     setVendors(null); setActions([]); setProcessList([]); setLastLoaded(null);
     setAtm(null); setAtmOuvert(null); setAtmSaveError("");
   };
@@ -3382,7 +3134,6 @@ export default function App() {
         { id: "dashboard", label: "Vue d'ensemble" },
         { id: "store",     label: "Magasins" },
         { id: "results",   label: "Résultats" },
-        { id: "history",   label: "Historique" },
       ] },
     { id: "anim", label: "Animer", hint: "Les équipes", ecrans: [
         { id: "goat",   label: "GOAT" },
@@ -3512,7 +3263,6 @@ export default function App() {
                   <StorePage user={user} store={selectedStore} data={results} vendors={vendors} actions={actions}
                     mois={mois} onBack={() => setPage("dashboard")} onSelectStore={setSelectedStore} />
                 )}
-                {page === "history" && <HistoryPage user={user} history={history} />}
                 {page === "goat"    && <GoatPage user={user} goatData={goatData} goatError={goatError} lastLoaded={lastLoaded} onRefresh={() => loadAll(true)} refreshing={refreshing} />}
                 {page === "visits"  && <VisitsPage user={user} visits={visits} />}
                 {page === "alternance" && <Alternance api={api} user={user} />}
