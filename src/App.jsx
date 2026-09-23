@@ -1979,8 +1979,9 @@ function GoatColumn({ variant, icon, kicker, title, subtitle, hero, rows, histor
 function GoatPage({ user, goatData, goatError, lastLoaded, onRefresh, refreshing }) {
   const isRZ = user.role === "rz";
 
-  // Pas de données de secours : si Notion n'a pas répondu, on le dit clairement
-  // plutôt que d'afficher un classement périmé qui passerait pour celui du jour.
+  // Pas de données de secours : si Google Sheets n'a pas répondu, on le dit
+  // clairement plutôt que d'afficher un classement périmé qui passerait pour
+  // celui du jour.
   if (!goatData) {
     return (
       <div className="stack">
@@ -1991,7 +1992,7 @@ function GoatPage({ user, goatData, goatError, lastLoaded, onRefresh, refreshing
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 750, fontSize: 15 }}>Classement indisponible</div>
               <p className="note" style={{ marginTop: 4 }}>
-                La lecture de la base GOAT dans Notion n'a pas abouti{goatError ? ` (${goatError})` : ""}.
+                La lecture de la base GOAT dans Google Sheets n'a pas abouti{goatError ? ` (${goatError})` : ""}.
                 Aucun classement n'est affiché : mieux vaut pas de chiffre qu'un chiffre périmé.
                 {lastLoaded ? ` Dernière tentative ${stampLabel(lastLoaded)}.` : ""}
               </p>
@@ -2040,11 +2041,11 @@ function GoatPage({ user, goatData, goatError, lastLoaded, onRefresh, refreshing
           <p>
             Saison en cours : <b>{saisonLibelle(saison)}</b> · score sur 100, chaque indicateur plafonné à son
             objectif, bonus +10 % pour les magasins solo
-            {lastLoaded ? ` · lu dans Notion ${stampLabel(lastLoaded)}` : ""}
+            {lastLoaded ? ` · lu dans Google Sheets ${stampLabel(lastLoaded)}` : ""}
           </p>
         </div>
         {isRZ && <Btn size="sm" variant="secondary" onClick={onRefresh} disabled={refreshing}>
-          {refreshing ? "Synchronisation…" : "Actualiser depuis Notion"}
+          {refreshing ? "Synchronisation…" : "Actualiser depuis Google Sheets"}
         </Btn>}
       </div>
 
