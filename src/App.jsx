@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import logoRepairMobile from "./RepairMobile.png";
 import Alternance from "./Alternance.jsx";
 import Calculateur from "./Calculateur.jsx";
+import Tarifs from "./Tarifs.jsx";
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  CONFIGURATION
@@ -3143,6 +3144,7 @@ export default function App() {
       { id: "alternance", label: "Alternance" },
       ] },
     { id: "comptoir", label: "Au comptoir", hint: "Les outils du quotidien", ecrans: [
+        { id: "tarifs",  label: "Tarifs" },
         { id: "calcul",  label: "Calculateur" },
         { id: "atm",     label: "Sinistre ATM" },
         { id: "process", label: "Process" },
@@ -3227,6 +3229,8 @@ export default function App() {
           <GuidePage />
         ) : page === "calcul" ? (
           <Calculateur user={user} />
+        ) : page === "tarifs" ? (
+          <Tarifs user={user} api={api} />
         ) : (
           <>
             {serverState !== "ok" && (
