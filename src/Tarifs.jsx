@@ -7,9 +7,9 @@
 // le RZ n'y saisit que les prix d'achat, la main d'œuvre et la GP, le serveur
 // calcule le prix de vente avec la règle du calculateur.
 //
-// Vitre arrière et micro-soudure ne se font que dans certains magasins
-// (onglet Paramètres du classeur) : on les affiche partout, avec le magasin
-// qui les réalise, pour que le vendeur puisse orienter le client.
+// Certaines réparations ne se font que dans un magasin (vitres arrière Apple
+// listées dans l'onglet Prix fixes → Pontarlier ; micro-soudure → Dijon) :
+// on les affiche partout, avec le magasin qui les réalise, pour orienter le client.
 // ═══════════════════════════════════════════════════════════════════════════
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { calculerPack } from "./Calculateur.jsx";
@@ -107,7 +107,8 @@ export default function Tarifs({ user, api }) {
   const tel = data?.marques?.find(m => m.nom === marque)?.modeles.find(m => m.nom === modele) || null;
   const rep = tel?.reparations.find(r => r.id === repId) || null;
 
-  const magasinsPour = (r) => (r?.famille === "Vitre arrière" ? data?.params?.magasinsVitre || [] : []);
+  // Magasins qui réalisent la réparation ; liste vide = tous les magasins.
+  const magasinsPour = (r) => r?.magasins || [];
   const horsMagasin = (r) => {
     const mags = magasinsPour(r);
     return mags.length > 0 && user?.store && !mags.includes(user.store);
