@@ -26,17 +26,9 @@ const euros = (v) =>
 
 const CSS = `
 .tar{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:18px;align-items:start}
-.tar-marques{display:flex;gap:8px;flex-wrap:wrap}
-.tar-marques button{border:1.5px solid var(--line);background:var(--surface);border-radius:10px;padding:9px 16px;
-  font:inherit;font-size:14px;font-weight:650;color:var(--ink);cursor:pointer}
-.tar-marques button.on{border-color:var(--brand);background:var(--brand-wash);color:var(--brand)}
-.tar-cherche{margin-top:14px}
-.tar-mods{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;margin-top:10px;
-  max-height:300px;overflow-y:auto;padding:2px}
-.tar-mods button{border:1.5px solid var(--line);background:var(--surface);border-radius:9px;padding:8px 10px;
-  font:inherit;font-size:13px;text-align:left;color:var(--ink);cursor:pointer}
-.tar-mods button:hover{border-color:var(--brand-light)}
-.tar-mods button.on{border-color:var(--brand);background:var(--brand-wash);font-weight:650}
+.tar-choix{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:12px}
+.tar-choix .select{width:100%;font-size:15px;padding:10px 12px}
+@media(max-width:520px){.tar-choix{grid-template-columns:1fr}}
 .tar-reps{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
 .tar-rep{border:1.5px solid var(--line);background:var(--surface);border-radius:12px;padding:12px 14px;
   text-align:left;font:inherit;color:var(--ink);cursor:pointer;position:relative}
@@ -77,7 +69,6 @@ export default function Tarifs({ user, api }) {
   const [marque, setMarque] = useState("");
   const [modele, setModele] = useState("");
   const [repId, setRepId] = useState("");
-  const [recherche, setRecherche] = useState("");
   const [film, setFilm] = useState(false);
   const [qualirepar, setQualirepar] = useState(false);
   const [copie, setCopie] = useState(false);
@@ -100,9 +91,8 @@ export default function Tarifs({ user, api }) {
 
   const modeles = useMemo(() => {
     const liste = data?.marques?.find(m => m.nom === marque)?.modeles || [];
-    const q = recherche.trim().toLowerCase().replace(/\s+/g, "");
-    return q ? liste.filter(m => m.nom.toLowerCase().replace(/\s+/g, "").includes(q)) : liste;
-  }, [data, marque, recherche]);
+    return liste;
+  }, [data, marque]);
 
   const tel = data?.marques?.find(m => m.nom === marque)?.modeles.find(m => m.nom === modele) || null;
   const rep = tel?.reparations.find(r => r.id === repId) || null;
@@ -119,7 +109,7 @@ export default function Tarifs({ user, api }) {
   // Le film est une option : on le retire du pack si le vendeur ne le propose pas.
   const totalPack = pack ? pack.pack - (film ? 0 : pack.film) : null;
 
-  const choisirMarque = (m) => { setMarque(m); setModele(""); setRepId(""); setRecherche(""); setCopie(false); };
+  const choisirMarque = (m) => { setMarque(m); setModele(""); setRepId(""); setCopie(false); };
   const choisirModele = (m) => {
     setModele(m); setCopie(false);
     // On garde la même réparation d'un modèle à l'autre si elle existe.
@@ -201,21 +191,20 @@ export default function Tarifs({ user, api }) {
           <div className="stack">
             <div className="card">
               <h2 className="h-section">Téléphone</h2>
-              <div className="tar-marques">
-                {data.marques.map(m => (
-                  <button key={m.nom} className={m.nom === marque ? "on" : ""} onClick={() => choisirMarque(m.nom)}>{m.nom}</button>
-                ))}
-              </div>
-              <div className="tar-cherche">
-                <label className="field-label" htmlFor="tar-cherche">Modèle</label>
-                <input id="tar-cherche" className="input" autoComplete="off" placeholder="Rechercher : 13 pro, A54, Fold…"
-                  value={recherche} onChange={(e) => setRecherche(e.target.value)} />
-              </div>
-              <div className="tar-mods">
-                {modeles.map(m => (
-                  <button key={m.nom} className={m.nom === modele ? "on" : ""} onClick={() => choisirModele(m.nom)}>{m.nom}</button>
-                ))}
-                {!modeles.length && <div className="tar-vide">Aucun modèle trouvé.</div>}
+              <div className="tar-choix">
+                <div>
+                  <label className="field-label" htmlFor="tar-marque">Marque</label>
+                  <select id="tar-marque" className="select" value={marque} onChange={(e) => choisirMarque(e.target.value)}>
+                    {data.marques.map(m => <option key={m.nom} value={m.nom}>{m.nom}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="field-label" htmlFor="tar-modele">Modèle</label>
+                  <select id="tar-modele" className="select" value={modele} onChange={(e) => choisirModele(e.target.value)}>
+                    <option value="">Choisir un modèle…</option>
+                    {modeles.map(m => <option key={m.nom} value={m.nom}>{m.nom}</option>)}
+                  </select>
+                </div>
               </div>
             </div>
 
