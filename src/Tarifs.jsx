@@ -224,7 +224,9 @@ export default function Tarifs({ user, api }) {
                       )}
                       {estRZ && (
                         <div className="meta" style={{ marginTop: 6 }}>
-                          {r.source === "fixe" ? "Prix fixe (PA à saisir)" : `PA ${euros(r.pa)} · MO ${euros(r.mo)} · marge ${euros(r.margeHT)} HT`}
+                          {r.source === "fixe"
+                            ? (data.version === 2 ? "Prix fixe (Tarifs_SAVE)" : "Prix fixe (PA à saisir)")
+                            : `PA ${euros(r.pa)} · ${r.temps != null ? `${r.temps}+${data.params?.pec ?? 10} min · ` : ""}MO ${r.mo != null ? euros(r.mo) : "?"} · marge ${euros(r.margeHT)} HT`}
                         </div>
                       )}
                     </button>
