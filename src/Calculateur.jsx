@@ -1,10 +1,13 @@
 // ═══════════════════════════════════════════════════════════════════════════
 // Calculateur de prix de réparation — écran « Au comptoir »
 //
-// Reprise de l'outil casifox.github.io/save-calculateur-de-prix, aux couleurs
-// de l'app. Même règle de calcul de la réparation, à l'euro près :
-//   TTC réparation = ((prix pièce HT × 1,3) + main d'œuvre HT) × 1,2
-//   arrondi à la dizaine la plus proche (144 → 140, 145 → 150)
+// Méthode au taux horaire (octobre 2026), la même que la grille Tarifs_V2_Save :
+//   main d'œuvre HT = (temps de réparation estimé + 10 min de prise en charge) × 70 € ÷ 60
+//   TTC réparation  = ((prix pièce HT × 1,3) + main d'œuvre HT) × 1,2
+//   arrondi à la dizaine la plus proche (144 → 140, 145 → 150), puis − 0,01 € (139,99)
+// Le technicien saisit le prix d'achat de la pièce et SON temps de réparation
+// effectif ; les 10 minutes (accueil, diagnostic, devis, encaissement) sont
+// ajoutées automatiquement.
 //
 // Garantie Plus : le palier dépend de la VALEUR DU TÉLÉPHONE (pas du prix de
 // la réparation). Le vendeur saisit cette valeur ; deux liens ouvrent la
@@ -17,8 +20,19 @@
 import { useState } from "react";
 
 // ─── Règles de prix (à modifier ici si la politique tarifaire change) ────────
-const COEF_PIECE = 1.3;
-const COEF_TVA = 1.2;
+// Mêmes valeurs que l'onglet Paramètres de Tarifs_V2_Save : si tu changes le taux
+// horaire dans le classeur, change-le aussi ici.
+export const REGLES_PRIX = {
+  taux: 70,      // € HT de l'heure
+  pec: 10,       // minutes de prise en charge ajoutées au temps du technicien
+  coef: 1.3,     // prix d'achat pièce × 1,3 (30 % de marge sur la pièce)
+  tva: 1.2,
+  arrondi: 10,   // arrondi à la dizaine
+  decote: 0.01,  // 140 → 139,99
+};
+const COEF_PIECE = REGLES_PRIX.coef;
+const COEF_TVA = REGLES_PRIX.tva;
+const TEMPS_RAPIDES = [10, 15, 20, 30, 45, 60];
 const PRIX_FILM_OCADIA = 29.99;
 const BONUS_QUALIREPAR = 25;
 
@@ -50,16 +64,25 @@ const euros = (v) =>
 
 const eurosSaisie = (v) => String(Math.round(v * 100) / 100).replace(".", ",");
 
-const arrondiDizaine = (v) => (v <= 0 ? 0 : Math.round(v / 10) * 10);
+const virgule = (v) => String(v).replace(".", ",");
 
 export const indexPalier = (valeur) => PALIERS_GP.findIndex(p => valeur <= p.max);
 
-export function calculerPrix(piece, mo) {
-  const pieceMajoree = piece * COEF_PIECE;
+// Prix d'une réparation au taux horaire. `p` permet de passer les paramètres
+// lus dans le classeur (page Tarifs) ; sinon les règles ci-dessus s'appliquent.
+export function calculerPrixTemps(piece, temps, p = {}) {
+  const r = { ...REGLES_PRIX, ...Object.fromEntries(Object.entries(p || {}).filter(([, v]) => v != null)) };
+  const tempsFacture = temps + r.pec;
+  const mo = Math.round(tempsFacture * r.taux / 60 * 100) / 100;
+  const pieceMajoree = piece * r.coef;
   const ht = pieceMajoree + mo;
-  const ttcBrut = ht * COEF_TVA;
-  const ttc = arrondiDizaine(ttcBrut);
-  return { pieceMajoree, ht, ttcBrut, ttc, margeHT: ttc / COEF_TVA - piece };
+  const ttcBrut = Math.round(ht * r.tva * 1e6) / 1e6;
+  const arrondi = r.arrondi > 0 ? Math.floor(ttcBrut / r.arrondi + 0.5) * r.arrondi : ttcBrut;
+  const ttc = arrondi <= 0 ? 0 : Math.round((arrondi - (r.decote || 0)) * 100) / 100;
+  return {
+    tempsFacture, mo, pieceMajoree, ht, ttcBrut, ttc, regles: r,
+    prix: ttc, margeHT: Math.round((ttc / r.tva - piece) * 100) / 100,
+  };
 }
 
 // Prix du pack. Le bonus ne peut pas dépasser le prix de la réparation.
@@ -130,6 +153,14 @@ const CSS = `
 .calc-det .mrow.tot{border-top:1.5px solid var(--line)}
 .calc-det .mrow.tot b{font-weight:800}
 .calc-marge{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.calc-temps{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.calc-temps button{border:1.5px solid var(--line);background:var(--surface);border-radius:999px;padding:4px 11px;
+  font:inherit;font-size:12.5px;color:var(--ink);cursor:pointer;font-variant-numeric:tabular-nums}
+.calc-temps button.on{border-color:var(--brand);background:var(--brand-wash);font-weight:650}
+.calc-aide{font-size:12px;color:var(--muted);margin-top:6px}
+.calc-fiche ol{margin:8px 0 0;padding-left:20px;font-size:13.5px;line-height:1.55}
+.calc-fiche li{margin:4px 0}
+.calc-fiche .ex{margin-top:10px;padding:10px 12px;border-radius:var(--r-sm);background:var(--brand-wash);font-size:12.5px;line-height:1.5}
 .calc-marge .v{white-space:nowrap;font-size:22px;font-weight:750;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
 @media(max-width:860px){
   .calc{grid-template-columns:1fr;grid-template-rows:auto;grid-template-areas:"tel" "rep" "res" "gp"}
@@ -142,16 +173,41 @@ const CSS = `
 `;
 
 // ─── Champ montant ───────────────────────────────────────────────────────────
-function ChampMontant({ id, label, value, onChange, erreur }) {
+function ChampMontant({ id, label, value, onChange, erreur, unite = "€", placeholder = "0,00", msgErreur = "Montant illisible", children }) {
   return (
     <div>
       <label className="field-label" htmlFor={id}>{label}</label>
       <div className="calc-in">
         <input id={id} className={`input${erreur ? " err" : ""}`} inputMode="decimal"
-          autoComplete="off" placeholder="0,00" value={value} onChange={onChange} />
-        <em>€</em>
+          autoComplete="off" placeholder={placeholder} value={value} onChange={onChange} />
+        <em>{unite}</em>
       </div>
-      {erreur && <div className="calc-err">Montant illisible</div>}
+      {erreur && <div className="calc-err">{msgErreur}</div>}
+      {children}
+    </div>
+  );
+}
+
+// ─── Fiche méthode : comment le prix est construit ──────────────────────────
+function FicheMethode() {
+  const r = REGLES_PRIX;
+  const ex = calculerPrixTemps(30, 15);
+  return (
+    <div className="calc-fiche">
+      <ol>
+        <li><b>Temps de réparation</b> : le technicien estime son temps effectif, de l'ouverture du téléphone au test final.</li>
+        <li><b>+ {r.pec} minutes</b> ajoutées d'office pour la prise en charge : accueil, diagnostic, devis, encaissement.</li>
+        <li><b>Main d'œuvre</b> = temps total × {r.taux} € HT de l'heure.</li>
+        <li><b>Pièce</b> = prix d'achat HT × {virgule(r.coef)}, soit {Math.round((r.coef - 1) * 100)} % de marge sur la pièce.</li>
+        <li><b>Prix TTC</b> = (pièce majorée + main d'œuvre) × {virgule(r.tva)}, arrondi à la dizaine la plus proche{r.decote ? `, moins ${virgule(r.decote)} €` : ""}.</li>
+      </ol>
+      <div className="ex">
+        <b>Exemple</b> — pièce à 30 € HT, 15 min de réparation :
+        {" "}15 + {r.pec} = {ex.tempsFacture} min × {r.taux} €/h = {euros(ex.mo)} ·
+        {" "}30 × {virgule(r.coef)} = {euros(ex.pieceMajoree)} ·
+        {" "}({euros(ex.pieceMajoree)} + {euros(ex.mo)}) × {virgule(r.tva)} = {euros(ex.ttcBrut)} → <b>{euros(ex.ttc)}</b>
+      </div>
+      <p className="note">Même calcul que la page Tarifs : un prix du calculateur et un prix de la grille sont comparables.</p>
     </div>
   );
 }
@@ -164,7 +220,7 @@ export default function Calculateur({ user }) {
   const [valeurTxt, setValeurTxt] = useState("");
   // Réparation
   const [pieceTxt, setPieceTxt] = useState("");
-  const [moTxt, setMoTxt] = useState("");
+  const [tempsTxt, setTempsTxt] = useState("");
   const [objet, setObjet] = useState("");
   const [qualirepar, setQualirepar] = useState(false);
   // Garantie Plus
@@ -172,16 +228,17 @@ export default function Calculateur({ user }) {
   // Divers
   const [copie, setCopie] = useState(false);
   const [detail, setDetail] = useState(false);
+  const [fiche, setFiche] = useState(false);
 
   const piece = lireMontant(pieceTxt);
-  const mo = lireMontant(moTxt);
+  const temps = lireMontant(tempsTxt);
   const valeur = lireMontant(valeurTxt);
   const errPiece = Number.isNaN(piece);
-  const errMo = Number.isNaN(mo);
+  const errTemps = Number.isNaN(temps) || (temps != null && temps > 480);
   const errValeur = Number.isNaN(valeur);
-  const pret = piece != null && mo != null && !errPiece && !errMo && (piece > 0 || mo > 0);
+  const pret = piece != null && temps != null && !errPiece && !errTemps;
 
-  const calc = pret ? calculerPrix(piece, mo) : null;
+  const calc = pret ? calculerPrixTemps(piece, temps) : null;
   const palierConseille = valeur != null && !errValeur && valeur > 0 ? indexPalier(valeur) : -1;
   const palier = palierForce ?? (palierConseille >= 0 ? palierConseille : null);
   const gp = palier != null ? PALIERS_GP[palier].prix : 0;
@@ -201,7 +258,7 @@ export default function Calculateur({ user }) {
 
   const reinit = () => {
     setMarque(""); setModele(""); setValeurTxt("");
-    setPieceTxt(""); setMoTxt(""); setObjet(""); setQualirepar(false);
+    setPieceTxt(""); setTempsTxt(""); setObjet(""); setQualirepar(false);
     setPalierForce(null); setCopie(false); setDetail(false);
   };
 
@@ -288,8 +345,16 @@ export default function Calculateur({ user }) {
           <div className="calc-fields">
             <ChampMontant id="calc-piece" label="Prix d'achat pièce (HT)" value={pieceTxt}
               onChange={(e) => { setPieceTxt(e.target.value); touche(); }} erreur={errPiece} />
-            <ChampMontant id="calc-mo" label="Main d'œuvre (HT)" value={moTxt}
-              onChange={(e) => { setMoTxt(e.target.value); touche(); }} erreur={errMo} />
+            <ChampMontant id="calc-temps" label="Temps de réparation estimé" value={tempsTxt} unite="min" placeholder="Ex. : 20"
+              onChange={(e) => { setTempsTxt(e.target.value); touche(); }} erreur={errTemps} msgErreur="Temps en minutes (0 à 480)">
+              <div className="calc-temps">
+                {TEMPS_RAPIDES.map(t => (
+                  <button key={t} type="button" className={temps === t ? "on" : ""}
+                    onClick={() => { setTempsTxt(String(t)); touche(); }}>{t} min</button>
+                ))}
+              </div>
+              <div className="calc-aide">Ton temps de réparation seul. +{REGLES_PRIX.pec} min de prise en charge ajoutées automatiquement.</div>
+            </ChampMontant>
             <div className="full">
               <label className="field-label" htmlFor="calc-objet">Réparation (facultatif, pour le devis)</label>
               <div className="calc-in">
@@ -350,7 +415,7 @@ export default function Calculateur({ user }) {
                   )}
                 </div>
               )}
-              {!calc && <div className="warn" style={{ color: "rgba(255,255,255,.55)" }}>Saisis le prix de la pièce et la main d'œuvre</div>}
+              {!calc && <div className="warn" style={{ color: "rgba(255,255,255,.55)" }}>Saisis le prix de la pièce et ton temps de réparation</div>}
               {calc && palier == null && <div className="warn">Saisis la valeur du téléphone ou choisis un palier GP pour afficher le prix du pack.</div>}
               <div className="alt">
                 <span>Réparation seule{pack?.bonus ? " (bonus déduit)" : ""}</span>
@@ -384,11 +449,12 @@ export default function Calculateur({ user }) {
               </button>
               {detail && (
                 <div style={{ marginTop: 12 }}>
-                  <div className="mrow"><span>Pièce × {String(COEF_PIECE).replace(".", ",")}</span><b>{euros(calc.pieceMajoree)}</b></div>
-                  <div className="mrow"><span>+ Main d'œuvre</span><b>{euros(mo)}</b></div>
+                  <div className="mrow"><span>Temps : {temps} + {calc.regles.pec} min de prise en charge</span><b>{calc.tempsFacture} min</b></div>
+                  <div className="mrow"><span>Main d'œuvre ({calc.regles.taux} € HT/h)</span><b>{euros(calc.mo)}</b></div>
+                  <div className="mrow"><span>Pièce × {virgule(COEF_PIECE)}</span><b>{euros(calc.pieceMajoree)}</b></div>
                   <div className="mrow"><span>= Total HT</span><b>{euros(calc.ht)}</b></div>
                   <div className="mrow"><span>TTC (TVA 20 %)</span><b>{euros(calc.ttcBrut)}</b></div>
-                  <div className="mrow"><span>Réparation arrondie à la dizaine</span><b>{euros(calc.ttc)}</b></div>
+                  <div className="mrow"><span>Réparation arrondie à la dizaine{calc.regles.decote ? ` − ${virgule(calc.regles.decote)} €` : ""}</span><b>{euros(calc.ttc)}</b></div>
                   <div className="mrow"><span>+ Garantie Plus</span><b>{palier != null ? euros(gp) : "—"}</b></div>
                   <div className="mrow"><span>+ Film Ocadia</span><b>{euros(pack.film)}</b></div>
                   {pack.bonus > 0 && <div className="mrow"><span>− Bonus QualiRépar</span><b>−{euros(pack.bonus)}</b></div>}
@@ -397,6 +463,13 @@ export default function Calculateur({ user }) {
               )}
             </div>
           )}
+
+          <div className="card">
+            <button className="btn btn-ghost btn-sm" onClick={() => setFiche(f => !f)}>
+              {fiche ? "Masquer la méthode" : "Comment est calculé le prix ?"}
+            </button>
+            {fiche && <FicheMethode />}
+          </div>
         </div>
       </div>
     </div>
