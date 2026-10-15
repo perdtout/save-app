@@ -36,6 +36,8 @@ const AUTRE = "__autre__";
 // Marques hors grille : valeur « am:Xiaomi » dans la liste des marques.
 const PREFIXE_AM = "am:";
 const FORFAIT = "__forfait__";
+// Suggestions pour la catégorie « Autre réparation » (le vendeur peut taper autre chose).
+const SUGGESTIONS_AUTRE = ["Connecteur de charge", "Caméra arrière", "Caméra avant", "Nappe", "Haut-parleur", "Bouton"];
 const TYPES_AUTRE = [
   { type: "Écran", temps: "ecran" },
   { type: "Batterie", temps: "batterie" },
@@ -127,7 +129,7 @@ export default function Tarifs({ user, api }) {
   const [modeleLibre, setModeleLibre] = useState("");
   const [autre, setAutre] = useState({ type: "Écran", designation: "", pa: "", temps: "", gp: "" });
   // Autres marques : devis au forfait.
-  const [fo, setFo] = useState({ cat: "", nb: 1, cout: "", valeur: "" });
+  const [fo, setFo] = useState({ cat: "", nb: 1, cout: "", valeur: "", designation: "" });
   const estRZ = user?.role === "rz";
 
   const charger = useCallback(async (forcer = false) => {
@@ -183,9 +185,12 @@ export default function Tarifs({ user, api }) {
   const coutFo = lireNombre(fo.cout), valeurFo = lireNombre(fo.valeur);
   const palierFo = valeurFo ? indexPalier(valeurFo) : -1;
   const gpFo = palierFo >= 0 ? PALIERS_GP[palierFo].prix : null;
-  const calcFo = coutFo != null && coutFo > 0 && tempsFo != null ? calculerPrixTemps(coutFo, tempsFo, data?.params) : null;
+  const desigFo = fo.designation.trim();
+  const manqueDesig = fo.cat === "autre" && !desigFo;
+  const calcFo = coutFo != null && coutFo > 0 && tempsFo != null && !manqueDesig ? calculerPrixTemps(coutFo, tempsFo, data?.params) : null;
+  const libelleFo = fo.cat === "autre" ? desigFo : catFo?.libelle;
   const repFo = calcFo ? {
-    id: FORFAIT, famille: catFo.libelle, libelle: catFo.libelle, gamme: "", source: "forfait",
+    id: FORFAIT, famille: catFo.libelle, libelle: libelleFo, gamme: "", source: "forfait",
     prix: calcFo.prix, prixAvecGP: gpFo ? Math.round((calcFo.prix + gpFo) * 100) / 100 : null, magasins: [],
   } : null;
 
@@ -395,8 +400,21 @@ export default function Tarifs({ user, api }) {
 
             {am && fo.cat && (
               <div className="card">
-                <h2 className="h-section">{catFo?.libelle} {nomMarque} — pièces</h2>
+                <h2 className="h-section">{fo.cat === "autre" ? "Autre réparation" : catFo?.libelle} {nomMarque} — pièces</h2>
                 <div className="tar-form">
+                  {fo.cat === "autre" && (
+                    <div className="plein">
+                      <label className="field-label" htmlFor="fo-desig">Réparation effectuée</label>
+                      <div className="tar-types" style={{ marginBottom: 8 }}>
+                        {SUGGESTIONS_AUTRE.map(s => (
+                          <button key={s} type="button" className={fo.designation === s ? "on" : ""} onClick={() => majFo("designation", s)}>{s}</button>
+                        ))}
+                      </div>
+                      <input id="fo-desig" className={`input txt${manqueDesig && (fo.cout || fo.valeur) ? " err" : ""}`} autoComplete="off"
+                        placeholder="Ou tape la réparation (ex. : nappe power)" value={fo.designation}
+                        onChange={(e) => majFo("designation", e.target.value)} />
+                    </div>
+                  )}
                   <div>
                     <span className="field-label">Nombre de pièces utilisées</span>
                     <div className="tar-nb">
@@ -508,7 +526,7 @@ export default function Tarifs({ user, api }) {
                   <div className="warn">Réparation faite uniquement à {magasinsPour(rep).join(", ")} : oriente le client.</div>
                 )}
                 {!rep && <div className="warn" style={{ color: "rgba(255,255,255,.55)" }}>
-                  {am ? (fo.cat ? "Saisis le coût total des pièces." : "Choisis la réparation.")
+                  {am ? (!fo.cat ? "Choisis la réparation." : manqueDesig ? "Indique la réparation effectuée." : "Saisis le coût total des pièces.")
                     : repId === AUTRE ? "Saisis le prix de la pièce et le temps de réparation." : "Choisis un modèle puis une réparation."}
                 </div>}
               </div>
