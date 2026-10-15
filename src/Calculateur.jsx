@@ -37,7 +37,7 @@ const PRIX_FILM_OCADIA = 29.99;
 const BONUS_QUALIREPAR = 25;
 
 // Paliers Garantie Plus : plafond de la VALEUR DU TÉLÉPHONE → prix de la GP
-const PALIERS_GP = [
+export const PALIERS_GP = [
   { max: 150,      label: "0 – 150 €",        prix: 29.99 },
   { max: 300,      label: "151 – 300 €",      prix: 39.99 },
   { max: 450,      label: "301 – 450 €",      prix: 49.99 },

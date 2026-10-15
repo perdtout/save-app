@@ -14,9 +14,15 @@
 // « Autre » : modèle ou réparation hors catalogue. Le technicien saisit le prix
 // de la pièce (HT) et son temps estimé ; le prix sort avec la même règle que
 // Tarifs_V2_Save (paramètres renvoyés par /api/tarifs).
+//
+// Autres marques (Xiaomi, Oppo, Honor, Huawei, Motorola, Autres) : devis
+// VERROUILLÉ. Le vendeur choisit la réparation (écran, écran à coller, batterie,
+// vitre arrière), le nombre de pièces et leur coût total ; le temps n'est pas
+// saisi, il vient de l'onglet « Autres marques » du classeur (+5 min par pièce
+// au-delà de la première). La Garantie Plus suit la valeur du téléphone.
 // ═══════════════════════════════════════════════════════════════════════════
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { calculerPack } from "./Calculateur.jsx";
+import { calculerPack, calculerPrixTemps, PALIERS_GP, indexPalier } from "./Calculateur.jsx";
 
 // « Écran compatible » + gamme « Bolt » → « Compatible Bolt » sous l'en-tête ÉCRAN.
 const sousTitre = (r) => {
@@ -27,6 +33,9 @@ const sousTitre = (r) => {
 
 // Choix « Autre » dans les listes (marque, modèle) et carte « Autre réparation ».
 const AUTRE = "__autre__";
+// Marques hors grille : valeur « am:Xiaomi » dans la liste des marques.
+const PREFIXE_AM = "am:";
+const FORFAIT = "__forfait__";
 const TYPES_AUTRE = [
   { type: "Écran", temps: "ecran" },
   { type: "Batterie", temps: "batterie" },
@@ -42,18 +51,6 @@ const lireNombre = (s) => {
   const n = Number(t);
   return Number.isFinite(n) && n >= 0 ? n : null;
 };
-
-// Même règle que le classeur Tarifs_V2_Save :
-// prix = arrondi(((PA × coef) + (temps + prise en charge) × taux ÷ 60) × TVA) − décote
-export function prixAuTauxHoraire(pa, temps, p = {}) {
-  const taux = p.taux ?? 70, pec = p.pec ?? 10, coef = p.coef ?? 1.3,
-    tva = p.tva ?? 1.2, arrondi = p.arrondi ?? 10, decote = p.decote ?? 0.01;
-  const mo = (temps + pec) * taux / 60;
-  const brut = Math.round(((pa * coef) + mo) * tva * 1e6) / 1e6;
-  const r = arrondi > 0 ? Math.floor(brut / arrondi + 0.5) * arrondi : brut;
-  const prix = r <= 0 ? 0 : Math.round((r - decote) * 100) / 100;
-  return { prix, mo: Math.round(mo * 100) / 100, margeHT: Math.round((prix / tva - pa) * 100) / 100 };
-}
 
 const euros = (v) =>
   v == null ? "—" : v.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
@@ -103,6 +100,14 @@ const CSS = `
 .tar-types button{border:1.5px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;
   font:inherit;font-size:13px;color:var(--ink);cursor:pointer}
 .tar-types button.on{border-color:var(--brand);background:var(--brand-wash);font-weight:650}
+.tar-nb{display:flex;align-items:center;gap:8px}
+.tar-nb button{width:40px;height:40px;border-radius:10px;border:1.5px solid var(--line);background:var(--surface);
+  font:inherit;font-size:20px;font-weight:700;color:var(--ink);cursor:pointer}
+.tar-nb button:disabled{opacity:.35;cursor:default}
+.tar-nb b{min-width:34px;text-align:center;font-size:20px;font-variant-numeric:tabular-nums}
+.tar-verrou{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;margin-top:12px;
+  border-radius:var(--r-sm);background:var(--brand-wash);font-size:13px}
+.tar-verrou b{font-size:16px;font-variant-numeric:tabular-nums;white-space:nowrap}
 @media(max-width:520px){.tar-form{grid-template-columns:1fr}}
 @media(max-width:860px){.tar{grid-template-columns:1fr}.tar-res{position:static}}
 `;
@@ -121,6 +126,8 @@ export default function Tarifs({ user, api }) {
   const [marqueLibre, setMarqueLibre] = useState("");
   const [modeleLibre, setModeleLibre] = useState("");
   const [autre, setAutre] = useState({ type: "Écran", designation: "", pa: "", temps: "", gp: "" });
+  // Autres marques : devis au forfait.
+  const [fo, setFo] = useState({ cat: "", nb: 1, cout: "", valeur: "" });
   const estRZ = user?.role === "rz";
 
   const charger = useCallback(async (forcer = false) => {
@@ -144,8 +151,11 @@ export default function Tarifs({ user, api }) {
   }, [data, marque]);
 
   const tel = data?.marques?.find(m => m.nom === marque)?.modeles.find(m => m.nom === modele) || null;
-  const modeleAutre = marque === AUTRE || modele === AUTRE;
-  const nomMarque = marque === AUTRE ? (marqueLibre.trim() || "Autre marque") : marque;
+  const autresMarques = data?.autresMarques || [];
+  const am = marque.startsWith(PREFIXE_AM) ? autresMarques.find(m => m.nom === marque.slice(PREFIXE_AM.length)) || null : null;
+  const amGenerique = !!am && /^autres?$/i.test(am.nom);
+  const modeleAutre = marque === AUTRE || modele === AUTRE || !!am;
+  const nomMarque = marque === AUTRE || amGenerique ? (marqueLibre.trim() || "Autre marque") : (am ? am.nom : marque);
   const nomModele = modeleAutre ? (modeleLibre.trim() || "modèle non listé") : modele;
   const telChoisi = !!tel || modeleAutre;
 
@@ -156,7 +166,7 @@ export default function Tarifs({ user, api }) {
     return v != null ? String(v) : "";
   };
   const paAutre = lireNombre(autre.pa), tempsAutre = lireNombre(autre.temps), gpAutre = lireNombre(autre.gp);
-  const calcAutre = paAutre != null && tempsAutre != null ? prixAuTauxHoraire(paAutre, tempsAutre, data?.params) : null;
+  const calcAutre = paAutre != null && tempsAutre != null ? calculerPrixTemps(paAutre, tempsAutre, data?.params) : null;
   const libelleAutre = autre.type === "Autre" ? (autre.designation.trim() || "Réparation hors catalogue")
     : `${autre.type}${autre.designation.trim() ? ` ${autre.designation.trim()}` : ""}`;
   const repAutre = calcAutre ? {
@@ -164,8 +174,23 @@ export default function Tarifs({ user, api }) {
     prix: calcAutre.prix, prixAvecGP: gpAutre ? Math.round((calcAutre.prix + gpAutre) * 100) / 100 : null, magasins: [],
   } : null;
 
-  const rep = repId === AUTRE ? repAutre : (tel?.reparations.find(r => r.id === repId) || null);
-  const gpRep = repId === AUTRE ? gpAutre : tel?.gp;
+  // Forfait autres marques : temps de la marque + 5 min par pièce supplémentaire.
+  const catsAutres = data?.categoriesAutres || [];
+  const catFo = catsAutres.find(c => c.id === fo.cat) || null;
+  const tempsBaseFo = am && catFo ? am.temps?.[catFo.id] : null;
+  const pieceSup = data?.params?.tempsPieceSup ?? 5;
+  const tempsFo = tempsBaseFo != null ? tempsBaseFo + pieceSup * Math.max(0, fo.nb - 1) : null;
+  const coutFo = lireNombre(fo.cout), valeurFo = lireNombre(fo.valeur);
+  const palierFo = valeurFo ? indexPalier(valeurFo) : -1;
+  const gpFo = palierFo >= 0 ? PALIERS_GP[palierFo].prix : null;
+  const calcFo = coutFo != null && coutFo > 0 && tempsFo != null ? calculerPrixTemps(coutFo, tempsFo, data?.params) : null;
+  const repFo = calcFo ? {
+    id: FORFAIT, famille: catFo.libelle, libelle: catFo.libelle, gamme: "", source: "forfait",
+    prix: calcFo.prix, prixAvecGP: gpFo ? Math.round((calcFo.prix + gpFo) * 100) / 100 : null, magasins: [],
+  } : null;
+
+  const rep = am ? repFo : repId === AUTRE ? repAutre : (tel?.reparations.find(r => r.id === repId) || null);
+  const gpRep = am ? gpFo : repId === AUTRE ? gpAutre : tel?.gp;
 
   // Magasins qui réalisent la réparation ; liste vide = tous les magasins.
   const magasinsPour = (r) => r?.magasins || [];
@@ -185,9 +210,11 @@ export default function Tarifs({ user, api }) {
   };
   const choisirMarque = (m) => {
     setMarque(m); setCopie(false);
+    if (m.startsWith(PREFIXE_AM)) { setModele(""); setRepId(""); return; }
     if (m === AUTRE) { setModele(AUTRE); ouvrirAutre(null); }
     else { setModele(""); setRepId(""); }
   };
+  const majFo = (champ, v) => { setFo(f => ({ ...f, [champ]: v })); setCopie(false); };
   const choisirModele = (m) => {
     setModele(m); setCopie(false);
     if (m === AUTRE) { ouvrirAutre(null); return; }
@@ -205,6 +232,7 @@ export default function Tarifs({ user, api }) {
       if (film || pack.bonus) l.push(`Pack${film ? " avec film Ocadia" : ""}${pack.bonus ? ", bonus QualiRépar déduit" : ""} : ${euros(totalPack)} TTC`);
     }
     if (rep.id === AUTRE) l.push("Tarif établi selon la pièce et le temps estimé, sous réserve de diagnostic.");
+    if (rep.id === FORFAIT) l.push(`Tarif forfaitaire ${nomMarque} (${fo.nb} pièce${fo.nb > 1 ? "s" : ""}), sous réserve de diagnostic.`);
     const mags = magasinsPour(rep);
     if (mags.length) l.push(`Réalisée à : ${mags.join(", ")}`);
     return l.join("\n");
@@ -276,17 +304,30 @@ export default function Tarifs({ user, api }) {
                 <div>
                   <label className="field-label" htmlFor="tar-marque">Marque</label>
                   <select id="tar-marque" className="select" value={marque} onChange={(e) => choisirMarque(e.target.value)}>
-                    {data.marques.map(m => <option key={m.nom} value={m.nom}>{m.nom}</option>)}
-                    <option value={AUTRE}>Autre marque…</option>
+                    {autresMarques.length > 0 ? (
+                      <>
+                        <optgroup label="Grille de prix">
+                          {data.marques.map(m => <option key={m.nom} value={m.nom}>{m.nom}</option>)}
+                        </optgroup>
+                        <optgroup label="Autres marques (forfait)">
+                          {autresMarques.map(m => <option key={m.nom} value={PREFIXE_AM + m.nom}>{m.nom}</option>)}
+                        </optgroup>
+                      </>
+                    ) : (
+                      <>
+                        {data.marques.map(m => <option key={m.nom} value={m.nom}>{m.nom}</option>)}
+                        <option value={AUTRE}>Autre marque…</option>
+                      </>
+                    )}
                   </select>
-                  {marque === AUTRE && (
-                    <input className="input txt tar-libre" autoComplete="off" placeholder="Ex. : Xiaomi"
+                  {(marque === AUTRE || amGenerique) && (
+                    <input className="input txt tar-libre" autoComplete="off" placeholder="Nom de la marque (ex. : Google Pixel)"
                       value={marqueLibre} onChange={(e) => { setMarqueLibre(e.target.value); setCopie(false); }} />
                   )}
                 </div>
                 <div>
                   <label className="field-label" htmlFor="tar-modele">Modèle</label>
-                  {marque !== AUTRE && (
+                  {marque !== AUTRE && !am && (
                     <select id="tar-modele" className="select" value={modele} onChange={(e) => choisirModele(e.target.value)}>
                       <option value="">Choisir un modèle…</option>
                       {modeles.map(m => <option key={m.nom} value={m.nom}>{m.nom}</option>)}
@@ -294,7 +335,7 @@ export default function Tarifs({ user, api }) {
                     </select>
                   )}
                   {modeleAutre && (
-                    <input id={marque === AUTRE ? "tar-modele" : undefined} className="input txt tar-libre" autoComplete="off"
+                    <input id={marque === AUTRE || am ? "tar-modele" : undefined} className={`input txt${am ? "" : " tar-libre"}`} autoComplete="off"
                       placeholder="Ex. : Redmi Note 13" value={modeleLibre}
                       onChange={(e) => { setModeleLibre(e.target.value); setCopie(false); }} />
                   )}
@@ -332,11 +373,68 @@ export default function Tarifs({ user, api }) {
                   </button>
                 </div>
               )}
-              {modeleAutre && <div className="tar-vide">Modèle hors catalogue : saisis la pièce et ton temps ci-dessous.</div>}
+              {am && (
+                <div className="tar-reps">
+                  {catsAutres.map(c => {
+                    const t = am.temps?.[c.id];
+                    return (
+                      <button key={c.id} className={`tar-rep${fo.cat === c.id ? " on" : ""}`} disabled={t == null}
+                        onClick={() => majFo("cat", c.id)}>
+                        <div className="fam">Forfait {am.nom}</div>
+                        <div className="nom">{c.libelle}</div>
+                        <div className="gp">{t != null ? `Temps standard : ${t} min` : "Non proposé"}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {am?.remarque && <p className="note">{am.remarque}</p>}
+              {modeleAutre && !am && <div className="tar-vide">Modèle hors catalogue : saisis la pièce et ton temps ci-dessous.</div>}
               {tel?.remarque && <p className="note">{tel.remarque}</p>}
             </div>
 
-            {repId === AUTRE && telChoisi && (
+            {am && fo.cat && (
+              <div className="card">
+                <h2 className="h-section">{catFo?.libelle} {nomMarque} — pièces</h2>
+                <div className="tar-form">
+                  <div>
+                    <span className="field-label">Nombre de pièces utilisées</span>
+                    <div className="tar-nb">
+                      <button type="button" disabled={fo.nb <= 1} onClick={() => majFo("nb", Math.max(1, fo.nb - 1))} aria-label="Une pièce de moins">−</button>
+                      <b>{fo.nb}</b>
+                      <button type="button" disabled={fo.nb >= 10} onClick={() => majFo("nb", Math.min(10, fo.nb + 1))} aria-label="Une pièce de plus">+</button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="field-label" htmlFor="fo-cout">Coût total des pièces (€ HT)</label>
+                    <input id="fo-cout" className={`input${fo.cout && coutFo == null ? " err" : ""}`} inputMode="decimal" placeholder="Ex. : 42,50"
+                      value={fo.cout} onChange={(e) => majFo("cout", e.target.value)} />
+                  </div>
+                  <div className="plein">
+                    <label className="field-label" htmlFor="fo-valeur">Valeur du téléphone (pour la Garantie Plus)</label>
+                    <input id="fo-valeur" className={`input${fo.valeur && valeurFo == null ? " err" : ""}`} inputMode="decimal" placeholder="Ex. : 250"
+                      value={fo.valeur} onChange={(e) => majFo("valeur", e.target.value)} />
+                    {gpFo != null && <div className="meta" style={{ marginTop: 4 }}>Palier {PALIERS_GP[palierFo].label} → Garantie Plus {euros(gpFo)}</div>}
+                  </div>
+                </div>
+                <div className="tar-verrou">
+                  <span>
+                    Temps facturé : {tempsBaseFo} min{fo.nb > 1 ? ` + ${pieceSup * (fo.nb - 1)} min (${fo.nb - 1} pièce${fo.nb > 2 ? "s" : ""} en plus)` : ""}
+                    {" "}+ {data.params?.pec ?? 10} min de prise en charge
+                  </span>
+                  <b>{tempsFo != null ? tempsFo + (data.params?.pec ?? 10) : "—"} min</b>
+                </div>
+                <p className="note">
+                  Additionne le prix d'achat HT de toutes les pièces utilisées. Le temps est fixé par marque et par réparation :
+                  il ne se modifie pas au comptoir.
+                </p>
+                {estRZ && calcFo && (
+                  <div className="meta">Pièces {euros(coutFo)} · MO {euros(calcFo.mo)} · marge {euros(calcFo.margeHT)} HT</div>
+                )}
+              </div>
+            )}
+
+            {repId === AUTRE && telChoisi && !am && (
               <div className="card">
                 <h2 className="h-section">Autre réparation — calcul du tarif</h2>
                 <div className="tar-form">
@@ -390,7 +488,7 @@ export default function Tarifs({ user, api }) {
                 <div className="lbl">{rep ? nomRep(rep) : "Prix de la réparation"}</div>
                 {rep && <div className="tel">{nomMarque} {nomModele}</div>}
                 <div className="big-price">{rep ? euros(rep.prixAvecGP ?? rep.prix) : "—"}</div>
-                {rep && <div className="tel">{rep.prixAvecGP ? "avec Garantie Plus" : (rep.id === AUTRE ? "sans Garantie Plus (montant non saisi)" : "Garantie Plus non renseignée pour ce modèle")}</div>}
+                {rep && <div className="tel">{rep.prixAvecGP ? "avec Garantie Plus" : (rep.id === FORFAIT ? "saisis la valeur du téléphone pour la Garantie Plus" : rep.id === AUTRE ? "sans Garantie Plus (montant non saisi)" : "Garantie Plus non renseignée pour ce modèle")}</div>}
                 {rep && rep.prixAvecGP && (
                   <div className="lines">
                     <div className="line"><span>Réparation</span><span>{euros(rep.prix)}</span></div>
@@ -410,7 +508,8 @@ export default function Tarifs({ user, api }) {
                   <div className="warn">Réparation faite uniquement à {magasinsPour(rep).join(", ")} : oriente le client.</div>
                 )}
                 {!rep && <div className="warn" style={{ color: "rgba(255,255,255,.55)" }}>
-                  {repId === AUTRE ? "Saisis le prix de la pièce et le temps de réparation." : "Choisis un modèle puis une réparation."}
+                  {am ? (fo.cat ? "Saisis le coût total des pièces." : "Choisis la réparation.")
+                    : repId === AUTRE ? "Saisis le prix de la pièce et le temps de réparation." : "Choisis un modèle puis une réparation."}
                 </div>}
               </div>
               {rep && rep.prixAvecGP && (
