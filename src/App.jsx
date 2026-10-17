@@ -693,7 +693,7 @@ table.tbl tr.clickable:hover td{background:var(--brand-wash)}
 .stackbar{display:flex;gap:2px;height:6px;margin-top:6px}
 .stackbar i{display:block;border-radius:2px;min-width:2px;animation:grow .55s cubic-bezier(.2,.9,.3,1) both;transform-origin:left}
 @keyframes grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
-.sg1{background:#F9D2B6} .sg2{background:#F0A170} .sg3{background:#E8612C} .sg4{background:#9E3610}
+.sg1{background:#F9D2B6} .sg2{background:#F0A170} .sg3{background:#E8612C} .sg4{background:#9E3610} .sg5{background:#5A1E08}
 .goat-legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--sub);align-items:center;
   background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);padding:12px 18px}
 .goat-legend span{display:inline-flex;align-items:center;gap:6px}
@@ -948,6 +948,7 @@ function LoginScreen({ onLogin, serverState, onRetryPing }) {
 const OCC_OBJ = { "Pontarlier": 50, "Lons-le-Saunier": 50, "Dijon": 25, "Besançon": 20, "Chalon-sur-Saône": 15 };
 const MOBILEO_OBJ = 10;   // bas de la fourchette 10-15
 const ATM_OBJ = 10;       // % des mobiles d'occasion
+const PROTECTED_OBJ = 6;  // contrats Protected par magasin et par mois
 const ACC_OBJ = 25;
 const GP_OBJ = 20;
 
@@ -979,7 +980,7 @@ const statusFor = (valeur, objectif) =>
   valeur == null ? "neutral" : valeur >= objectif ? "ok" : valeur >= objectif * 0.85 ? "warn" : "bad";
 
 function totauxZone(d, d2, stores) {
-  const t = { margeTotal: 0, margeAcc: 0, margeGP: 0, occasion: 0, occObjectif: 0, mobileo: 0, atm: 0 };
+  const t = { margeTotal: 0, margeAcc: 0, margeGP: 0, occasion: 0, occObjectif: 0, mobileo: 0, atm: 0, protected: 0, protectedSuivi: false };
   for (const s of stores) {
     t.margeTotal += d?.accessoires?.[s]?.margeTotal || 0;
     t.margeAcc   += d?.accessoires?.[s]?.margeAcc   || 0;
@@ -988,6 +989,8 @@ function totauxZone(d, d2, stores) {
     t.occObjectif += d?.occasion?.[s]?.objectif ?? OCC_OBJ[s] ?? 0;
     t.mobileo    += d2?.mobileo?.[s]?.total         || 0;
     t.atm        += d2?.atm?.[s]?.total             || 0;
+    t.protected  += d2?.protected?.[s]?.total       || 0;
+    if (d2?.protected?.[s]) t.protectedSuivi = true;
   }
   t.ratioAcc = t.margeTotal ? +(t.margeAcc / t.margeTotal * 100).toFixed(1) : null;
   t.ratioGP  = t.margeTotal ? +(t.margeGP  / t.margeTotal * 100).toFixed(1) : null;
@@ -1022,6 +1025,19 @@ function calculerPriorites(d, d2, stores, mois) {
       detail: `Projection à ${projMobileo} pour un objectif de ${objMobileoZone} à ${15 * stores.length}.` +
         (zeros.length ? ` Toujours à zéro : ${zeros.join(", ")}.` : ""),
       valeur: `${t.mobileo}`, objectif: `≈ ${projMobileo} projetés`, ton: projMobileo < objMobileoZone * 0.5 ? "bad" : "warn",
+    });
+  }
+
+  const objProtZone = PROTECTED_OBJ * stores.length;
+  const projProt = projeter(t.protected, mois);
+  if (t.protectedSuivi && projProt != null && projProt < objProtZone) {
+    const zeros = stores.filter(s => (d2?.protected?.[s]?.total || 0) === 0);
+    items.push({
+      poids: (objProtZone - projProt) / objProtZone * 0.9,
+      titre: `Protected : ${t.protected} abonnement${t.protected > 1 ? "s" : ""} vendu${t.protected > 1 ? "s" : ""} sur la zone`,
+      detail: `Projection à ${projProt} pour un objectif de ${objProtZone}.` +
+        (zeros.length ? ` Toujours à zéro : ${zeros.join(", ")}.` : ""),
+      valeur: `${t.protected}`, objectif: `≈ ${projProt} projetés`, ton: projProt < objProtZone * 0.5 ? "bad" : "warn",
     });
   }
 
@@ -1105,6 +1121,13 @@ function Dashboard({ user, data, onOpenStore }) {
       meter: { value: t.ratioATM, max: 25, target: ATM_OBJ, status: statusFor(t.ratioATM, ATM_OBJ) },
       foot: <Chip status={statusFor(t.ratioATM, ATM_OBJ)}>{t.ratioATM != null ? `${pct(t.ratioATM)} des occasions · objectif ${ATM_OBJ} %` : "Aucune occasion vendue"}</Chip>,
     },
+    {
+      lbl: "Protected", val: t.protectedSuivi ? `${t.protected}` : "—",
+      meter: t.protectedSuivi ? { value: t.protected, max: PROTECTED_OBJ * stores.length, target: PROTECTED_OBJ * stores.length, status: statusFor(projeter(t.protected, mois), PROTECTED_OBJ * stores.length) } : null,
+      foot: t.protectedSuivi
+        ? <>Projection <b>≈ {projeter(t.protected, mois) ?? "—"}</b> · objectif {PROTECTED_OBJ * stores.length}</>
+        : <>Pas encore de suivi ce mois-ci</>,
+    },
   ];
 
   return (
@@ -1161,7 +1184,7 @@ function Dashboard({ user, data, onOpenStore }) {
         <div className="grid grid-stores">
           {classement.map((store, rang) => {
             const acc = d?.accessoires?.[store], gp = d?.gp?.[store], occ = d?.occasion?.[store];
-            const mob = d2?.mobileo?.[store], atm = d2?.atm?.[store];
+            const mob = d2?.mobileo?.[store], atm = d2?.atm?.[store], prot = d2?.protected?.[store];
             const objOcc = occ?.objectif ?? OCC_OBJ[store] ?? 0;
             const kpis = [
               { k: "Acc.", v: acc?.ratio, max: 40, target: ACC_OBJ, txt: pct(acc?.ratio), s: statusFor(acc?.ratio, ACC_OBJ) },
@@ -1169,9 +1192,11 @@ function Dashboard({ user, data, onOpenStore }) {
               { k: "Occ.", v: occ?.volume, max: objOcc || 1, target: objOcc, txt: occ?.volume != null ? `${occ.volume}/${objOcc}` : "—", s: statusFor(projeter(occ?.volume, mois), objOcc) },
               { k: "Mob.", v: mob?.total, max: 15, target: MOBILEO_OBJ, txt: mob?.total != null ? `${mob.total}/${MOBILEO_OBJ}` : "—", s: statusFor(projeter(mob?.total, mois), MOBILEO_OBJ) },
               { k: "ATM", v: atm?.ratio, max: 25, target: ATM_OBJ, txt: pct(atm?.ratio), s: statusFor(atm?.ratio, ATM_OBJ) },
+              ...(prot ? [{ k: "Prot.", v: prot.total, max: prot.objectif || PROTECTED_OBJ, target: prot.objectif || PROTECTED_OBJ, txt: `${prot.total}/${prot.objectif || PROTECTED_OBJ}`, s: statusFor(projeter(prot.total, mois), prot.objectif || PROTECTED_OBJ) }] : []),
             ];
             const atteints = kpis.filter(x => x.s === "ok").length;
-            const ton = atteints >= 4 ? "ok" : atteints >= 2 ? "warn" : "bad";
+            const nbObj = kpis.length;
+            const ton = atteints >= nbObj - 1 ? "ok" : atteints >= 2 ? "warn" : "bad";
             return (
               <button className={`store s-${ton}`} key={store} onClick={() => onOpenStore(store)}>
                 <h3>{store}</h3>
@@ -1189,7 +1214,7 @@ function Dashboard({ user, data, onOpenStore }) {
                   </div>
                 ))}
                 <div className="score">
-                  <Chip status={ton}>{atteints} objectif{atteints > 1 ? "s" : ""} sur 5</Chip>
+                  <Chip status={ton}>{atteints} objectif{atteints > 1 ? "s" : ""} sur {nbObj}</Chip>
                   {isRZ && <span className="txt-muted">n<sup>o</sup>&nbsp;{rang + 1} zone</span>}
                 </div>
               </button>
@@ -1244,7 +1269,7 @@ function VendorsTable({ rows, mois, showStore = true }) {
             <th>Vendeur</th>
             <th className="r">Marge</th><th className="r">dont access.</th>
             <th className="r">Acc.</th><th className="r">GP</th>
-            <th className="r">Occ.</th><th className="r">Mobileo</th><th className="r">ATM</th>
+            <th className="r">Occ.</th><th className="r">Mobileo</th><th className="r">ATM</th><th className="r">Protected</th>
           </tr></thead>
           <tbody>
             {tri.map(v => (
@@ -1263,6 +1288,9 @@ function VendorsTable({ rows, mois, showStore = true }) {
                 <td className="r">{v.occasion ?? 0}</td>
                 <td className={`r${!v.mobileo ? " txt-bad" : ""}`} style={{ fontWeight: v.mobileo ? 400 : 700 }}>{v.mobileo ?? 0}</td>
                 <td className={`r${!v.atm ? " txt-bad" : " txt-ok"}`} style={{ fontWeight: 700 }}>{v.atm ?? 0}</td>
+                <td className={`r${!v.protected ? " txt-bad" : ""}`} style={{ fontWeight: v.protected ? 400 : 700 }}>
+                  {v.protected ?? 0}{v.objectifProtected ? <span className="txt-muted"> / {v.objectifProtected.toLocaleString("fr-FR")}</span> : null}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -1284,6 +1312,7 @@ function VendorsTable({ rows, mois, showStore = true }) {
             <div className="mrow"><span>Mobiles d'occasion</span><b>{v.occasion ?? 0}</b></div>
             <div className="mrow"><span>Mobileo</span><b className={!v.mobileo ? "txt-bad" : ""}>{v.mobileo ?? 0}</b></div>
             <div className="mrow"><span>ATM</span><b className={!v.atm ? "txt-bad" : "txt-ok"}>{v.atm ?? 0}</b></div>
+            <div className="mrow"><span>Protected</span><b className={!v.protected ? "txt-bad" : ""}>{v.protected ?? 0}{v.objectifProtected ? ` / ${v.objectifProtected.toLocaleString("fr-FR")}` : ""}</b></div>
           </div>
         ))}
       </div>
@@ -1314,6 +1343,7 @@ function ResultsPage({ user, data, vendors, vendorsError, mois, onRefresh, refre
     { id: "occasion",    label: "Mobiles d'occasion", objectif: "objectif par magasin" },
     { id: "mobileo",     label: "Mobileo", objectif: `${MOBILEO_OBJ} à 15 par magasin` },
     { id: "atm",         label: "ATM", objectif: `≥ ${ATM_OBJ} % des occasions` },
+    { id: "protected",   label: "Protected", objectif: `${PROTECTED_OBJ} par magasin` },
   ];
   const courant = INDICATEURS.find(i => i.id === indicateur);
 
@@ -1347,6 +1377,15 @@ function ResultsPage({ user, data, vendors, vendorsError, mois, onRefresh, refre
         trend: a.trend, jauge: { v: a.total, max: 15, target: MOBILEO_OBJ },
         libelles: ["Détail vendeurs", "Objectif"], extra: proj != null ? `projection ≈ ${proj}` : null };
     }
+    if (indicateur === "protected") {
+      const a = d2?.protected?.[store]; if (!a) return null;
+      const obj = a.objectif || PROTECTED_OBJ;
+      const proj = projeter(a.total, mois);
+      const vendeurs = Object.entries(a.vendeurs || {}).map(([n, v]) => `${n} ${v}`).join(" · ");
+      return { cols: [vendeurs || "—", `${obj}`], valeur: `${a.total}`, statut: statusFor(proj, obj),
+        trend: a.trend, jauge: { v: a.total, max: obj, target: obj },
+        libelles: ["Détail vendeurs", "Objectif"], extra: proj != null ? `projection ≈ ${proj}` : null };
+    }
     const a = d2?.atm?.[store]; if (!a) return null;
     return { cols: [`${a.total}`, `${a.mobOcc}`], valeur: pct(a.ratio), statut: statusFor(a.ratio, ATM_OBJ),
       trend: a.trend, jauge: { v: a.ratio, max: 25, target: ATM_OBJ }, libelles: ["Contrats ATM", "Mobiles occasion"] };
@@ -1355,7 +1394,8 @@ function ResultsPage({ user, data, vendors, vendorsError, mois, onRefresh, refre
   const analysisMap = indicateur === "accessoires" ? d?.analysis?.accessoires
     : indicateur === "gp" ? d?.analysis?.gp
     : indicateur === "mobileo" ? d2?.analysis?.mobileo
-    : indicateur === "atm" ? d2?.analysis?.atm : null;
+    : indicateur === "atm" ? d2?.analysis?.atm
+    : indicateur === "protected" ? d2?.analysis?.protected : null;
 
   return (
     <div className="stack">
@@ -1402,6 +1442,9 @@ function ResultsPage({ user, data, vendors, vendorsError, mois, onRefresh, refre
                   <th style={{ width: 130 }}>Progression</th>
                 </tr></thead>
                 <tbody>
+                  {indicateur === "protected" && !stores.some(s => ligne(s)) && (
+                    <tr><td colSpan={6} className="empty">Pas encore de ventes Protected saisies ce mois-ci.</td></tr>
+                  )}
                   {stores.map(store => {
                     const l = ligne(store); if (!l) return null;
                     return (
@@ -1453,7 +1496,7 @@ function ResultsPage({ user, data, vendors, vendorsError, mois, onRefresh, refre
                 Cumul des journées saisies · classement par marge générée
               </p>
             </div>
-            <Chip status="neutral">Objectifs : accessoires {ACC_OBJ} % · GP {GP_OBJ} % · ATM {ATM_OBJ} % des occasions</Chip>
+            <Chip status="neutral">Objectifs : accessoires {ACC_OBJ} % · GP {GP_OBJ} % · ATM {ATM_OBJ} % des occasions · Protected {PROTECTED_OBJ} par magasin</Chip>
           </div>
           {vendorsError
             ? <div className="empty">Résultats par vendeur indisponibles ({vendorsError}).</div>
@@ -1469,15 +1512,16 @@ function StorePage({ user, store, data, vendors, actions, mois, onBack, onSelect
   const isRZ = user.role === "rz";
   const d = data?.page1, d2 = data?.page2;
   const acc = d?.accessoires?.[store], gp = d?.gp?.[store], occ = d?.occasion?.[store];
-  const mob = d2?.mobileo?.[store], atm = d2?.atm?.[store];
+  const mob = d2?.mobileo?.[store], atm = d2?.atm?.[store], prot = d2?.protected?.[store];
   const objOcc = occ?.objectif ?? OCC_OBJ[store] ?? 0;
+  const objProt = prot?.objectif || PROTECTED_OBJ;
   const equipe = (vendors || []).filter(v => v.store === store);
   const plan = (actions || []).filter(a => a.store === store && (isRZ || a.published));
   const faites = plan.filter(a => a.state === "Fait").length;
 
   const commentaires = [
     d?.analysis?.accessoires?.[store], d?.analysis?.gp?.[store],
-    d2?.analysis?.mobileo?.[store], d2?.analysis?.atm?.[store],
+    d2?.analysis?.mobileo?.[store], d2?.analysis?.atm?.[store], d2?.analysis?.protected?.[store],
   ].filter(Boolean);
 
   const tuiles = [
@@ -1498,6 +1542,11 @@ function StorePage({ user, store, data, vendors, actions, mois, onBack, onSelect
     { lbl: "Contrats ATM", val: atm?.total != null ? `${atm.total}` : "—",
       meter: { v: atm?.ratio, max: 25, target: ATM_OBJ, s: statusFor(atm?.ratio, ATM_OBJ) },
       foot: <Chip status={statusFor(atm?.ratio, ATM_OBJ)}>{atm ? `${pct(atm.ratio)} de ${atm.mobOcc} occasions` : "—"}</Chip> },
+    { lbl: "Protected", val: prot ? <>{prot.total} <small>/ {objProt}</small></> : "—",
+      meter: prot ? { v: prot.total, max: objProt, target: objProt, s: statusFor(projeter(prot.total, mois), objProt) } : null,
+      foot: prot
+        ? <>{Object.entries(prot.vendeurs || {}).map(([n, v]) => `${n} ${v}`).join(" · ") || `Projection ≈ ${projeter(prot.total, mois) ?? "—"}`}</>
+        : <>Pas encore de suivi ce mois-ci</> },
   ];
 
   return (
@@ -1882,15 +1931,25 @@ function TrendChart({ points, target, suffix = "", isVolume = false, mois }) {
 
 // ─── GOAT — composants visuels ────────────────────────────────────────────────
 // ─── GOAT — composants ────────────────────────────────────────────────────────
-// Le score sur 100 se décompose en Accessoires (25), GP (25), Mobileo (30) et
-// ATM (20). Une seule barre empilée, une seule teinte du clair au foncé : on lit
-// la composition sans transformer la ligne en graphique.
+// Barème depuis la semaine du 13/10/2026 : 5 indicateurs à 20 points chacun
+// (Accessoires, GP, Mobileo, ATM, Protected). Les périodes plus anciennes
+// gardent l'ancien barème (Acc 25 / GP 25 / Mobileo 30 / ATM 20) : on le
+// reconnaît à l'absence de score Protected dans la ligne. Une seule barre
+// empilée, une seule teinte du clair au foncé.
 const GOAT_PARTS = [
+  { key: "accessoires", label: "Accessoires", max: 20, cls: "sg1" },
+  { key: "gp",          label: "GP",          max: 20, cls: "sg2" },
+  { key: "mobileo",     label: "Mobileo",     max: 20, cls: "sg3" },
+  { key: "atm",         label: "ATM",         max: 20, cls: "sg4" },
+  { key: "protected",   label: "Protected",   max: 20, cls: "sg5" },
+];
+const GOAT_PARTS_AVANT_PROTECTED = [
   { key: "accessoires", label: "Accessoires", max: 25, cls: "sg1" },
   { key: "gp",          label: "GP",          max: 25, cls: "sg2" },
   { key: "mobileo",     label: "Mobileo",     max: 30, cls: "sg3" },
   { key: "atm",         label: "ATM",         max: 20, cls: "sg4" },
 ];
+const partsFor = (breakdown) => (breakdown?.protected == null ? GOAT_PARTS_AVANT_PROTECTED : GOAT_PARTS);
 
 function GoatLegend() {
   return (
@@ -1905,11 +1964,12 @@ function GoatLegend() {
 
 function GoatStack({ breakdown }) {
   if (!breakdown) return null;
-  const total = GOAT_PARTS.reduce((s, p) => s + (breakdown[p.key] || 0), 0);
+  const parts = partsFor(breakdown);
+  const total = parts.reduce((s, p) => s + (breakdown[p.key] || 0), 0);
   if (!total) return null;
   return (
-    <div className="stackbar" title={GOAT_PARTS.map(p => `${p.label} ${(breakdown[p.key] || 0).toFixed(1)}/${p.max}`).join(" · ")}>
-      {GOAT_PARTS.map(p => {
+    <div className="stackbar" title={parts.map(p => `${p.label} ${(breakdown[p.key] || 0).toFixed(1)}/${p.max}`).join(" · ")}>
+      {parts.map(p => {
         const v = breakdown[p.key] || 0;
         if (v <= 0) return null;
         return <i key={p.key} className={p.cls} style={{ width: `${(v / 100) * 100}%` }} />;
@@ -2135,11 +2195,12 @@ function GoatPage({ user, goatData, goatError, lastLoaded, onRefresh, refreshing
           Comment le score est calculé
         </summary>
         <p className="note" style={{ marginTop: 10 }}>
-          Chaque indicateur est plafonné à 100 % de son objectif individuel : Accessoires 25 points, Garantie Plus
-          25 points, Mobileo 30 points, ATM 20 points. L'objectif Mobileo individuel correspond à l'objectif du
-          magasin (12, milieu de la fourchette 10–15) divisé par le nombre de vendeurs actifs. Les magasins tenus
-          par une seule personne — Chalon et Besançon — reçoivent un bonus de 10 % sur le score final, puisque le
-          vendeur porte seul l'intégralité de l'activité.
+          Depuis la semaine du 13 octobre 2026, cinq indicateurs comptent chacun pour 20 points, plafonnés à
+          100 % de l'objectif : Accessoires (25 % de la marge), Garantie Plus (20 %), Mobileo (6 contrats par mois,
+          1,5 par semaine), ATM et Protected ({PROTECTED_OBJ} par magasin et par mois, divisés entre les vendeurs du
+          magasin). Les magasins tenus par une seule personne — Chalon et Besançon — reçoivent un bonus de 10 % sur
+          le score final, puisque le vendeur porte seul l'intégralité de l'activité. Les semaines et mois précédents
+          restent notés avec l'ancien barème (Accessoires 25, GP 25, Mobileo 30, ATM 20).
         </p>
       </details>
     </div>
