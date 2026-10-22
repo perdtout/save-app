@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Fragment } from "react";
 import logoRepairMobile from "./RepairMobile.png";
 import Alternance from "./Alternance.jsx";
 import Tarifs from "./Tarifs.jsx";
@@ -686,6 +686,47 @@ table.tbl tr.clickable:hover td{background:var(--brand-wash)}
 .goat-row .who>span{font-size:11px;color:var(--muted)}
 .goat-row .sc{font-size:16px;font-weight:850;font-variant-numeric:tabular-nums;flex-shrink:0;letter-spacing:-.02em}
 .goat-row .sc small{font-size:9.5px;color:var(--muted);font-weight:650}
+
+/* ── Course GOAT (championnat F1 + courses mois/semaine) ── */
+.race{background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);padding:16px 18px 14px}
+.race-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.race-top h3{font-size:16px;font-weight:800;letter-spacing:-.01em;margin:0}
+.race-top p{font-size:12px;color:var(--muted);margin:3px 0 0}
+.race-live{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:750;text-transform:uppercase;letter-spacing:.07em;
+  color:var(--brand);background:var(--brand-wash);border-radius:20px;padding:3px 9px;margin-left:8px;vertical-align:2px}
+.race-live i{width:6px;height:6px;border-radius:50%;background:var(--brand);animation:racepulse 1.6s infinite}
+.race-live.off{color:var(--sub);background:var(--line-2)} .race-live.off i{background:var(--sub);animation:none}
+@keyframes racepulse{0%,100%{opacity:1}50%{opacity:.25}}
+.race-grid{display:grid;grid-template-columns:132px 1fr 78px;column-gap:10px;align-items:center}
+.race-scale{position:relative;height:18px;font-size:9.5px;color:var(--muted);font-weight:650}
+.race-scale span{position:absolute;transform:translateX(-50%);white-space:nowrap}
+.race-scale span.now{color:var(--brand);font-weight:800}
+.race-name{display:flex;align-items:center;gap:8px;min-width:0;padding:7px 0}
+.race-name .rk{width:22px;height:22px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:800;background:var(--line-2);color:var(--sub)}
+.race-name .rk.m1{background:linear-gradient(145deg,#FFD34E,#C98A00);color:#fff}
+.race-name .rk.m2{background:linear-gradient(145deg,#DDE1E6,#9AA0A8);color:#fff}
+.race-name .rk.m3{background:linear-gradient(145deg,#E2A76B,#B06A28);color:#fff}
+.race-name b{display:block;font-size:13px;font-weight:750;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.race-name small{display:block;font-size:10.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.race-lane{position:relative;height:30px;border-radius:15px;background:var(--line-2)}
+.race-lane .tick{position:absolute;top:5px;bottom:5px;width:1px;background:rgba(43,43,43,.10)}
+.race-lane .trail{position:absolute;left:0;top:11px;height:8px;border-radius:4px;background:linear-gradient(90deg,rgba(232,97,44,.12),rgba(232,97,44,.45))}
+.race-lane .pace{position:absolute;top:-4px;bottom:-4px;width:0;border-left:2px dashed var(--brand);opacity:.55}
+.race-pin{position:absolute;top:50%;transform:translate(-50%,-50%);width:26px;height:26px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:850;color:#fff;background:var(--ink);
+  box-shadow:0 2px 6px rgba(43,43,43,.25);border:2px solid #fff;transition:left .6s ease}
+.race-pin.p1{background:linear-gradient(145deg,#FFD34E,#C98A00)} .race-pin.p2{background:linear-gradient(145deg,#DDE1E6,#9AA0A8)}
+.race-pin.p3{background:linear-gradient(145deg,#E2A76B,#B06A28)} .race-pin.zero{background:#C9C3BD}
+.race-val{text-align:right;font-variant-numeric:tabular-nums;line-height:1.15}
+.race-val b{font-size:15px;font-weight:850;letter-spacing:-.02em}
+.race-val small{display:block;font-size:10px;color:var(--muted);font-weight:650}
+.race-val small.gain{color:var(--brand)}
+.race-row.zero{opacity:.5}
+.race-foot{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:10px;font-size:11px;color:var(--muted)}
+.race-foot b{color:var(--sub)}
+@media(max-width:640px){ .race{padding:14px 12px} .race-grid{grid-template-columns:86px 1fr 58px;column-gap:7px}
+  .race-name .rk{display:none} .race-val b{font-size:13px} .race-scale{font-size:8.5px} }
 .goat-solo{font-size:8.5px;font-weight:800;color:#fff;background:var(--brand);
   padding:1px 6px;border-radius:8px;margin-left:6px;vertical-align:1.5px;letter-spacing:.03em}
 
@@ -2034,6 +2075,130 @@ function GoatColumn({ variant, icon, kicker, title, subtitle, hero, rows, histor
   );
 }
 
+// ─── COURSE GOAT ──────────────────────────────────────────────────────────────
+// Trois pistes : la saison (championnat F1, un palier par mois), le mois en cours
+// (un palier par jour ouvré) et la semaine en cours (mardi → samedi). Sur les
+// pistes mois/semaine, la position = score /100 et le lièvre avance au rythme
+// des jours ouvrés écoulés : devant le lièvre, on est dans les temps.
+const initiales = (n) => (n || "?").split(/[\s-]+/).map(x => x[0]).join("").slice(0, 2).toUpperCase();
+const fmt1 = (v) => Number(v || 0).toLocaleString("fr-FR", { maximumFractionDigits: 1 });
+const dateCourte = (iso) => iso ? `${Number(iso.slice(8))}/${iso.slice(5, 7)}` : "";
+
+function RaceTrack({ paliers, nowIndex, pacePct, lanes, frontLabel }) {
+  const n = paliers.length;
+  const x = (i) => ((i + 1) / n) * 100;
+  return (
+    <div className="race-grid">
+      <div /><div className="race-scale">
+        {paliers.map((p, i) => (
+          <span key={i} className={i === nowIndex ? "now" : ""} style={{ left: `${x(i)}%` }}>
+            {(n <= 12 || i % 2 === 1 || i === nowIndex || i === n - 1) ? p : ""}
+          </span>
+        ))}
+      </div><div className="race-scale" style={{ textAlign: "right" }}>{frontLabel}</div>
+      {lanes.map(l => (
+        <Fragment key={l.name}>
+          <div className={`race-name${l.zero ? " race-row zero" : ""}`}>
+            <div className={`rk${l.pos && l.pos <= 3 ? ` m${l.pos}` : ""}`}>{l.pos || "–"}</div>
+            <div style={{ minWidth: 0 }}><b>{l.name}{l.mvp ? " 🏆" : ""}</b><small>{l.store}</small></div>
+          </div>
+          <div className={`race-lane${l.zero ? " race-row zero" : ""}`} title={l.title}>
+            {paliers.map((_, i) => <i key={i} className="tick" style={{ left: `${x(i)}%` }} />)}
+            <i className="trail" style={{ width: `${Math.max(0, Math.min(100, l.pct))}%` }} />
+            {pacePct != null && <i className="pace" style={{ left: `${pacePct}%` }} />}
+            <div className={`race-pin${l.zero ? " zero" : l.pos && l.pos <= 3 ? ` p${l.pos}` : ""}`}
+              style={{ left: `${Math.max(4, Math.min(96, l.pct))}%` }}>{initiales(l.name)}</div>
+          </div>
+          <div className={`race-val${l.zero ? " race-row zero" : ""}`}>
+            <b>{l.value}</b>
+            {l.sub && <small className={l.gain ? "gain" : ""}>{l.sub}</small>}
+          </div>
+        </Fragment>
+      ))}
+    </div>
+  );
+}
+
+function GoatRace({ race }) {
+  const [vue, setVue] = useState("saison");
+  if (!race) return null;
+  const { saison, mois, semaine, bareme } = race;
+  const enDirect = (p) => p.officielle
+    ? <span className="race-live off"><i />Officiel</span>
+    : <span className="race-live"><i />En direct</span>;
+  const majLe = (p) => p.dernierJourSaisi ? ` · dernières saisies du ${dateCourte(p.dernierJourSaisi)}` : "";
+
+  let contenu;
+  if (vue === "saison") {
+    const lead = saison.classement[0]?.points || 1;
+    const front = saison.avancement * 100;
+    contenu = (
+      <>
+        <div className="race-top">
+          <div>
+            <h3>🐐 Championnat de la saison {enDirect({ officielle: true })}</h3>
+            <p>{saison.label} · {saison.periodesComptees.semaines} semaines et {saison.periodesComptees.mois} mois au compteur ·
+              le leader est sur la ligne du jour, les autres à proportion de leurs points</p>
+          </div>
+        </div>
+        <RaceTrack paliers={saison.paliers} nowIndex={saison.moisIndex} pacePct={front} frontLabel="pts"
+          lanes={saison.classement.map(c => ({
+            name: c.name, store: c.store, pos: c.pos, zero: c.points === 0,
+            pct: front * (c.points / lead),
+            value: c.points,
+            sub: c.provisoire ? `+${c.provisoire} en jeu` : (c.pos === 1 ? "leader" : `−${lead - c.points}`),
+            gain: !!c.provisoire,
+            title: `${c.name} · ${c.points} pts · ${c.mois} MVP mois · ${c.semaines} MVP semaine · ${c.podiums} podiums`,
+          }))} />
+        <div className="race-foot">
+          <span>Barème : <b>{bareme.semaine.join(" / ")}</b> pts par semaine, <b>×{bareme.multMois}</b> pour le mois</span>
+          <span>« en jeu » = points que rapporteraient la semaine et le mois en cours s'ils s'arrêtaient ce soir</span>
+        </div>
+      </>
+    );
+  } else {
+    const p = vue === "mois" ? mois : semaine;
+    const paliers = vue === "mois" ? p.paliers.map(x => x.label) : p.paliers.map(x => x.label);
+    const pace = p.joursTotal ? (p.jourIndex / p.joursTotal) * 100 : null;
+    contenu = (
+      <>
+        <div className="race-top">
+          <div>
+            <h3>{vue === "mois" ? "🏆 Course au MVP du mois" : "⭐ Course au MVP de la semaine"} {enDirect(p)}</h3>
+            <p>{p.label} · jour {p.jourIndex}/{p.joursTotal} ouvré{majLe(p)} · le trait pointillé = le rythme pour finir à 100</p>
+          </div>
+        </div>
+        <RaceTrack paliers={paliers} nowIndex={p.jourIndex - 1} pacePct={p.officielle ? null : pace} frontLabel="/100"
+          lanes={p.classement.map(c => ({
+            name: c.name, store: c.store, pos: c.pos, zero: !c.total, mvp: c.mvp,
+            pct: c.total || 0,
+            value: fmt1(c.total),
+            sub: c.points ? `${c.points} pts` : "—",
+            gain: !p.officielle && c.points > 0,
+            title: c.breakdown ? `Acc ${fmt1(c.breakdown.accessoires)} · GP ${fmt1(c.breakdown.gp)} · Mobileo ${fmt1(c.breakdown.mobileo)} · ATM ${fmt1(c.breakdown.atm)} · Protected ${fmt1(c.breakdown.protected)}${c.isSolo ? " · bonus solo" : ""}` : c.name,
+          }))} />
+        <div className="race-foot">
+          <span>Score sur 100 (5 × 20), bonus solo +10 %</span>
+          {!p.officielle && <span>Classement provisoire recalculé chaque jour ; le classement officiel prend le relais à la clôture</span>}
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <div className="race">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+        <div className="seg">
+          <button className={vue === "saison" ? "on" : ""} onClick={() => setVue("saison")}>🐐 Saison</button>
+          <button className={vue === "mois" ? "on" : ""} onClick={() => setVue("mois")}>🏆 Mois</button>
+          <button className={vue === "semaine" ? "on" : ""} onClick={() => setVue("semaine")}>⭐ Semaine</button>
+        </div>
+      </div>
+      {contenu}
+    </div>
+  );
+}
+
 // ─── ÉCRAN GOAT ───────────────────────────────────────────────────────────────
 // Trois colonnes côte à côte : la saison, le mois, la semaine. Chaque colonne
 // porte son propre historique, replié sous son tableau.
@@ -2084,7 +2249,12 @@ function GoatPage({ user, goatData, goatError, lastLoaded, onRefresh, refreshing
   const moisSaison    = titresSaison.filter(t => t.type === "month");
   const semainesSaison = titresSaison.filter(t => t.type === "week");
 
-  const classementSaison = computeGoatSeasonPoints(titresSaison);
+  // Championnat F1 (décision du 22/10/2026) quand le backend le fournit ;
+  // sinon repli sur l'ancien décompte (3 pts par MVP du mois, 1 par MVP semaine).
+  const raceSaison = data.race?.saison;
+  const classementSaison = raceSaison
+    ? raceSaison.classement.map(c => ({ name: c.name, store: c.store, points: c.points, months: c.mois, weeks: c.semaines }))
+    : computeGoatSeasonPoints(titresSaison);
   const goat = classementSaison[0];
   const streak = computeCurrentStreak(moisSaison);
   const showStreak = streak && streak.count >= 2;
@@ -2120,6 +2290,8 @@ function GoatPage({ user, goatData, goatError, lastLoaded, onRefresh, refreshing
         </Card>
       )}
 
+      <GoatRace race={data.race} />
+
       <GoatLegend />
 
       <div className="goat-cols">
@@ -2128,7 +2300,7 @@ function GoatPage({ user, goatData, goatError, lastLoaded, onRefresh, refreshing
           variant="saison" icon="🐐"
           kicker={`Saison ${saison?.replace("-", " – ")}`}
           title="GOAT de la saison"
-          subtitle={`${saisonLibelle(saison)} · 3 points par MVP du mois, 1 point par MVP de la semaine`}
+          subtitle={raceSaison ? `${saisonLibelle(saison)} · barème F1 : 10/8/6/5/4/3/2/1 par semaine, ×3 pour le mois` : `${saisonLibelle(saison)} · 3 points par MVP du mois, 1 point par MVP de la semaine`}
           hero={goat && (
             <div className="goat-hero">
               <div className="badge">🐐</div>
