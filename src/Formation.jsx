@@ -11,7 +11,7 @@
 //
 // Ton : Thomas (RZ) qui parle directement à l'arrivant, en le tutoyant.
 // ═══════════════════════════════════════════════════════════════════════════
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const CSS = `
 .frm-hero{background:var(--ink);color:#fff;border-radius:var(--r);padding:22px 24px;position:relative;overflow:hidden}
@@ -21,15 +21,15 @@ const CSS = `
 .frm-hero:after{content:"";position:absolute;right:-40px;top:-40px;width:160px;height:160px;border-radius:50%;
   background:radial-gradient(circle,rgba(232,97,44,.45),transparent 70%)}
 .frm-tabs{overflow-x:auto;max-width:100%}
-.frm-ecl{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:18px;align-items:start}
-@media(max-width:860px){.frm-ecl{grid-template-columns:1fr}}
+.frm-ecl{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:18px;align-items:start}
+@media(max-width:980px){.frm-ecl{grid-template-columns:1fr}}
 .frm-svg{width:100%;height:auto;display:block}
 .frm-svg .piece{cursor:pointer;transition:fill .15s}
 .frm-svg .piece:hover{filter:brightness(.94)}
 .frm-svg .pastille{cursor:pointer}
-.frm-svg .pastille circle{fill:var(--ink);stroke:#fff;stroke-width:2}
+.frm-svg .pastille circle{fill:var(--ink);stroke:#fff;stroke-width:2;filter:drop-shadow(0 1px 2px rgba(0,0,0,.3))}
 .frm-svg .pastille.on circle{fill:var(--brand)}
-.frm-svg .pastille text{fill:#fff;font-size:12px;font-weight:700;text-anchor:middle;dominant-baseline:central;pointer-events:none}
+.frm-svg .pastille text{fill:#fff;font-weight:700;text-anchor:middle;dominant-baseline:central;pointer-events:none}
 .frm-svg .couche{fill:var(--muted);font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
 .frm-liste{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
 .frm-liste button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 11px;
@@ -89,148 +89,357 @@ const CSS = `
 `;
 
 // ─── Vue éclatée ─────────────────────────────────────────────────────────────
-// Chaque couche est dessinée dans un repère « téléphone à plat » (160 × 320),
-// puis projetée en isométrie. Les pastilles sont recalculées avec la même projection.
+// Quatre couches flottantes (écran, châssis, composants, vitre arrière), chacune
+// dessinée dans un repère « téléphone à plat » (160 × 320) puis projetée en
+// isométrie. Chaque pièce a sa zone cliquable (hit) et une étiquette reliée par
+// un trait. Sur téléphone, les étiquettes disparaissent au profit des pastilles.
 const W = 160, H = 320;
 const ISO = { a: 0.9, b: 0.35, c: -0.55, d: 0.45 };
-const COUCHES = [
-  { id: "avant",   label: "Face avant",   tx: 300, ty: 18 },
-  { id: "chassis", label: "Châssis",      tx: 300, ty: 196 },
-  { id: "arriere", label: "Face arrière", tx: 300, ty: 374 },
-];
+const COUCHES = {
+  avant:   { tx: 330, ty: 20,  ep: 6,  label: "Face avant" },
+  chassis: { tx: 330, ty: 200, ep: 10, label: "Châssis" },
+  compo:   { tx: 330, ty: 405, ep: 0,  label: "Composants" },
+  arriere: { tx: 330, ty: 610, ep: 6,  label: "Face arrière" },
+};
 const proj = (x, y, c) => [c.tx + ISO.a * x + ISO.c * y, c.ty + ISO.b * x + ISO.d * y];
 const matrice = (c) => `matrix(${ISO.a},${ISO.b},${ISO.c},${ISO.d},${c.tx},${c.ty})`;
+const rr = (x, y, w, h, r) =>
+  `M${x + r} ${y}H${x + w - r}A${r} ${r} 0 0 1 ${x + w} ${y + r}V${y + h - r}A${r} ${r} 0 0 1 ${x + w - r} ${y + h}` +
+  `H${x + r}A${r} ${r} 0 0 1 ${x} ${y + h - r}V${y + r}A${r} ${r} 0 0 1 ${x + r} ${y}Z`;
+const CADRE = rr(0, 0, W, H, 22) + rr(9, 9, W - 18, H - 18, 15);
+const NAPPE = "M144 112 L152 112 L152 262 L108 262";
 
 const PIECES = [
-  { n: 1, couche: "avant", nom: "Écran (vitre + dalle + tactile)", px: 80, py: 170,
+  { n: 1, couche: "avant", court: "Écran", cote: "L", px: 30, py: 230,
+    hit: { rect: [0, 0, W, H, 22] },
+    nom: "Écran (vitre + dalle + tactile)",
     role: "Affiche l'image (dalle OLED ou LCD) et capte le toucher (couche tactile). La vitre de protection est collée dessus : on change l'ensemble, pas la vitre seule.",
     panne: "Vitre cassée, taches ou lignes, tactile fantôme ou mort, écran noir alors que le téléphone sonne.",
     attention: "Ouverture à la chaleur et au médiator, jamais en force : les nappes de l'écran sont fragiles et courtes. Sur iPhone, compare l'origine et le compatible (Bolt / Spark) avec le client avant de commander." },
-  { n: 2, couche: "avant", nom: "Écouteur & capteurs (proximité, luminosité, Face ID)", px: 80, py: 18,
-    role: "L'écouteur sert aux appels. Les capteurs éteignent l'écran contre l'oreille, règlent la luminosité et gèrent la reconnaissance faciale.",
+  { n: 2, couche: "chassis", court: "Caméra avant & Face ID", cote: "R", px: 100, py: 20,
+    hit: { rect: [42, 10, 76, 22, 10] },
+    nom: "Écouteur, caméra avant & capteurs (Face ID)",
+    role: "L'écouteur sert aux appels. La caméra avant fait les selfies. Les capteurs éteignent l'écran contre l'oreille, règlent la luminosité et gèrent la reconnaissance faciale.",
     panne: "Son faible en appel, écran qui ne s'éteint pas pendant un appel, Face ID indisponible.",
     attention: "Ces éléments se transfèrent de l'ancien écran vers le neuf. Face ID est appairé à la carte mère : une nappe abîmée = Face ID perdu définitivement. Zéro précipitation sur cette étape." },
-  { n: 3, couche: "chassis", nom: "Châssis (cadre)", px: 8, py: 200,
-    role: "La structure du téléphone : il porte tous les composants, les boutons et souvent les antennes intégrées au cadre.",
+  { n: 3, couche: "chassis", court: "Châssis (cadre)", cote: "L", px: 4, py: 200,
+    hit: { d: CADRE },
+    nom: "Châssis (cadre)",
+    role: "La structure du téléphone : il porte tous les composants, les boutons et souvent les antennes intégrées au cadre (les petites bandes plastique sur le métal).",
     panne: "Cadre tordu après une chute (l'écran neuf ne se pose plus à plat), boutons enfoncés.",
     attention: "Un cadre tordu fait casser l'écran neuf à la pose. Contrôle-le avant de commander la pièce et préviens le client." },
-  { n: 4, couche: "chassis", nom: "Carte mère", px: 110, py: 60,
+  { n: 4, couche: "compo", court: "Carte mère", cote: "R", px: 108, py: 40,
+    hit: { rect: [66, 10, 84, 108, 6] },
+    nom: "Carte mère",
     role: "Le cerveau : processeur, mémoire (les données du client), gestion de l'alimentation et du réseau. Tous les connecteurs de nappes y arrivent.",
     panne: "Ne s'allume plus, redémarre en boucle, pas de réseau, ne charge pas malgré un connecteur neuf.",
     attention: "La pièce la plus chère et la plus fragile. Aucun outil métal posé dessus batterie branchée. La micro-soudure se fait uniquement à Dijon : on oriente le client, on ne bricole pas." },
-  { n: 5, couche: "chassis", nom: "Caméras", px: 32, py: 38,
-    role: "Modules photo arrière (grand-angle, ultra grand-angle, téléobjectif) et caméra avant (sur la face avant selon le modèle).",
+  { n: 5, couche: "compo", court: "Caméras arrière", cote: "L", px: 12, py: 64,
+    hit: { rect: [10, 10, 52, 60, 10] },
+    nom: "Caméras arrière",
+    role: "Le bloc photo arrière (grand-angle, ultra grand-angle, téléobjectif selon le modèle), relié à la carte mère par sa nappe.",
     panne: "Photo floue, écran noir dans l'appli, bruit de vibration (stabilisateur), lentille arrière fêlée.",
     attention: "Ne jamais toucher l'optique avec les doigts. Sur les iPhone récents, une caméra neuve peut afficher « pièce inconnue » : on l'annonce au client avant." },
-  { n: 6, couche: "chassis", nom: "Batterie", px: 80, py: 195,
+  { n: 6, couche: "compo", court: "Batterie", cote: "L", px: 24, py: 200,
+    hit: { rect: [18, 128, 124, 130, 8] },
+    nom: "Batterie",
     role: "Stocke l'énergie. Elle alimente tout, y compris quand le téléphone semble éteint.",
     panne: "Autonomie faible, extinctions à 20-30 %, batterie gonflée qui soulève l'écran.",
     attention: "TOUJOURS la déconnecter en premier, avec un outil plastique. Gonflée ou percée : on ne force pas, on ne perce pas, on ne chauffe pas — on isole dans le bac de sécurité et on me prévient." },
-  { n: 7, couche: "chassis", nom: "Connecteur de charge (sous-carte + micro)", px: 80, py: 290,
+  { n: 7, couche: "compo", court: "Connecteur de charge", cote: "R", px: 82, py: 300,
+    hit: { rect: [56, 266, 52, 42, 4] },
+    nom: "Connecteur de charge (sous-carte + micro)",
     role: "Prise de charge et de données. Sur beaucoup de modèles, la sous-carte porte aussi le micro principal.",
     panne: "Ne charge plus ou par intermittence, câble qui tient mal, micro qui ne marche plus en appel.",
     attention: "Toujours tenter un nettoyage (outil non conducteur) avant de vendre un remplacement : une peluche de poche suffit à bloquer la charge." },
-  { n: 8, couche: "chassis", nom: "Haut-parleur", px: 132, py: 290,
+  { n: 8, couche: "compo", court: "Haut-parleur", cote: "R", px: 140, py: 300,
+    hit: { rect: [112, 268, 36, 38, 6] },
+    nom: "Haut-parleur",
     role: "Son des sonneries, de la musique et du haut-parleur en appel.",
     panne: "Son grésillant, faible ou absent, grille bouchée.",
     attention: "Vérifie le son avant démontage pour ne pas te faire reprocher une panne déjà existante." },
-  { n: 9, couche: "chassis", nom: "Moteur vibreur", px: 28, py: 288,
+  { n: 9, couche: "compo", court: "Moteur vibreur", cote: "L", px: 18, py: 296,
+    hit: { rect: [14, 268, 36, 36, 5] },
+    nom: "Moteur vibreur",
     role: "Produit les vibrations et le retour haptique.",
     panne: "Plus de vibration, bruit de cliquetis.",
     attention: "Petit, souvent maintenu par des vis de longueurs différentes : range-les à part." },
-  { n: 10, couche: "chassis", nom: "Nappes & connecteurs", px: 140, py: 125,
-    role: "Les « câbles » plats qui relient chaque pièce à la carte mère, clipsés sur des connecteurs.",
+  { n: 10, couche: "compo", court: "Nappes", cote: "R", px: 152, py: 180,
+    hit: { d: NAPPE, trait: true },
+    nom: "Nappes & connecteurs",
+    role: "Les « câbles » plats (en orange sur le schéma) qui relient chaque pièce à la carte mère, clipsés sur des connecteurs dorés.",
     panne: "Une nappe mal clipsée ou pincée suffit à donner « écran noir » ou « tactile mort » après réparation.",
-    attention: "On déclipse à la verticale avec un spatule plastique, jamais en tirant sur la nappe. On reclipse bien à plat, sans forcer." },
-  { n: 11, couche: "arriere", nom: "Vitre arrière / coque", px: 50, py: 250,
-    role: "Ferme le téléphone et protège l'intérieur. Sur la plupart des modèles récents, c'est du verre collé.",
+    attention: "On déclipse à la verticale avec une spatule plastique, jamais en tirant sur la nappe. On reclipse bien à plat, sans forcer." },
+  { n: 11, couche: "arriere", court: "Vitre arrière", cote: "L", px: 24, py: 250,
+    hit: { rect: [0, 0, W, H, 22] },
+    nom: "Vitre arrière / coque",
+    role: "Ferme le téléphone et protège l'intérieur. Sur la plupart des modèles récents, c'est du verre collé, avec l'îlot des objectifs photo.",
     panne: "Vitre éclatée, coupures, poussière qui rentre.",
     attention: "Vitres arrière Apple de l'onglet « Prix fixes » des tarifs : faisables uniquement à Pontarlier. Les autres se font dans tous les magasins." },
-  { n: 12, couche: "arriere", nom: "Bobine charge sans fil / NFC", px: 80, py: 170,
-    role: "Permet la charge sans fil et le paiement sans contact.",
+  { n: 12, couche: "arriere", court: "Charge sans fil / NFC", cote: "R", px: 118, py: 170,
+    hit: { circle: [80, 170, 46] },
+    nom: "Bobine charge sans fil / NFC",
+    role: "La bobine en cuivre permet la charge sans fil (et l'aimantation MagSafe sur iPhone) ; l'antenne NFC permet le paiement sans contact.",
     panne: "Charge sans fil ou paiement mobile qui ne fonctionnent plus après une chute ou une réparation.",
     attention: "Souvent collée sous la vitre arrière : à décoller doucement, elle se déchire facilement." },
 ];
 
+// Forme d'une zone cliquable / de surbrillance, dans le repère de la couche.
+function Zone({ hit, ...props }) {
+  if (hit.rect) { const [x, y, w, h, r] = hit.rect; return <rect x={x} y={y} width={w} height={h} rx={r} {...props} />; }
+  if (hit.circle) { const [cx, cy, r] = hit.circle; return <circle cx={cx} cy={cy} r={r} {...props} />; }
+  return <path d={hit.d} fillRule="evenodd" {...props} />;
+}
+
+// Objectif photo : bague métal, verre sombre, reflet.
+const Objectif = ({ x, y, r }) => (
+  <g>
+    <circle cx={x} cy={y} r={r} fill="url(#frmBague)" />
+    <circle cx={x} cy={y} r={r * 0.74} fill="#0E0E10" />
+    <circle cx={x} cy={y} r={r * 0.42} fill="#22324D" />
+    <circle cx={x - r * 0.25} cy={y - r * 0.25} r={r * 0.16} fill="#fff" opacity=".75" />
+  </g>
+);
+
+// Épaisseur d'une couche : copie sombre décalée vers le bas, dessinée dessous.
+const Tranche = ({ c, d, couleur }) => (
+  <g transform={`translate(0,${c.ep})`}><g transform={matrice(c)}><path d={d} fill={couleur} fillRule="evenodd" /></g></g>
+);
+
+function DessinArriere() {
+  return (
+    <>
+      <path d={rr(0, 0, W, H, 22)} fill="url(#frmDos)" stroke="#A9A29A" strokeWidth="1.2" />
+      <path d="M0 0 L120 0 L0 150 Z" fill="#fff" opacity=".12" />
+      {/* Îlot photo */}
+      <rect x="8" y="8" width="62" height="68" rx="15" fill="#DCD6CF" stroke="#B9B1A9" strokeWidth="1.2" />
+      <Objectif x={25} y={27} r={10.5} />
+      <Objectif x={25} y={56} r={10.5} />
+      <Objectif x={52} y={41} r={10.5} />
+      <circle cx="54" cy="64" r="3.6" fill="#FFF6D8" stroke="#C9C2B8" />
+      {/* Aimants MagSafe + bobine cuivre */}
+      <circle cx="80" cy="170" r="46" fill="none" stroke="#8A8F96" strokeWidth="3.5" strokeDasharray="5 3" />
+      {[40, 34, 28, 22, 16].map(r => (
+        <circle key={r} cx="80" cy="170" r={r} fill="none" stroke="#B8733A" strokeWidth="3.2" />
+      ))}
+      <circle cx="80" cy="170" r="9" fill="#2B2B2B" />
+      <path d="M80 210 L80 236 L96 236" stroke="#E8892C" strokeWidth="5" fill="none" strokeLinecap="round" />
+    </>
+  );
+}
+
+function DessinComposants() {
+  return (
+    <>
+      {/* Caméras arrière */}
+      <rect x="10" y="10" width="52" height="60" rx="10" fill="#3B3B3D" stroke="#222" />
+      <Objectif x={25} y={27} r={9} />
+      <Objectif x={25} y={53} r={9} />
+      <Objectif x={48} y={40} r={9} />
+      <path d="M36 70 L36 84 L68 84" stroke="#E8892C" strokeWidth="5" fill="none" strokeLinecap="round" />
+      {/* Carte mère */}
+      <rect x="66" y="10" width="84" height="108" rx="6" fill="#1F5E3B" stroke="#143F27" strokeWidth="1.2" />
+      <rect x="72" y="16" width="40" height="46" rx="3" fill="url(#frmMetal)" stroke="#8A8F96" />
+      <rect x="116" y="16" width="28" height="30" rx="3" fill="url(#frmMetal)" stroke="#8A8F96" />
+      <rect x="74" y="68" width="32" height="32" rx="2" fill="#151515" />
+      <rect x="80" y="74" width="20" height="20" rx="1" fill="#2A2A2A" />
+      {[54, 68, 82, 96].map(y => <rect key={y} x="116" y={y} width="26" height="8" rx="1.5" fill="#D4AF37" stroke="#9C7C1C" strokeWidth=".8" />)}
+      {[[70, 106], [78, 108], [86, 106], [94, 109], [102, 106], [110, 108]].map(([x, y], i) => <rect key={i} x={x} y={y} width="4" height="3" fill="#C9C2B8" />)}
+      {/* Batterie */}
+      <rect x="18" y="128" width="124" height="130" rx="8" fill="url(#frmBatt)" stroke="#111" />
+      <rect x="30" y="150" width="100" height="70" rx="4" fill="#ECE8E3" />
+      <text x="80" y="181" textAnchor="middle" fontSize="16" fontWeight="800" fill="#2B2B2B">Li-ion</text>
+      <text x="80" y="198" textAnchor="middle" fontSize="9" fill="#5A544E">3,87 V · 3 279 mAh</text>
+      <path d="M68 206 L80 206 L74 214 Z" fill="#E8612C" />
+      <rect x="118" y="104" width="16" height="30" rx="2" fill="#E8892C" />
+      {/* Nappe principale vers la sous-carte */}
+      <path d={NAPPE} stroke="#E8892C" strokeWidth="6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      {/* Vibreur */}
+      <rect x="14" y="268" width="36" height="36" rx="5" fill="url(#frmMetal)" stroke="#8A847E" />
+      <rect x="20" y="276" width="24" height="20" rx="3" fill="#A9A29A" />
+      <circle cx="32" cy="286" r="4" fill="#5A544E" />
+      {/* Sous-carte + port de charge */}
+      <rect x="56" y="266" width="52" height="20" rx="3" fill="#E8892C" />
+      <rect x="66" y="270" width="12" height="8" rx="1" fill="#D4AF37" />
+      <rect x="64" y="286" width="36" height="22" rx="5" fill="url(#frmMetal)" stroke="#8A8F96" />
+      <rect x="70" y="293" width="24" height="8" rx="4" fill="#111" />
+      {/* Haut-parleur */}
+      <rect x="112" y="268" width="36" height="38" rx="6" fill="#1E1E1E" />
+      {[0, 1, 2, 3].map(i => [0, 1, 2].map(j => (
+        <circle key={`${i}${j}`} cx={119 + i * 7.5} cy={278 + j * 9} r="1.8" fill="#77706A" />
+      )))}
+    </>
+  );
+}
+
+function DessinChassis() {
+  return (
+    <>
+      <path d={CADRE} fill="url(#frmMetal)" stroke="#6E737A" strokeWidth="1.2" fillRule="evenodd" />
+      {/* Bandes d'antenne */}
+      {[[0, 40], [151, 40], [0, 280], [151, 280]].map(([x, y], i) => <rect key={i} x={x} y={y} width="9" height="3" fill="#E8E3DE" />)}
+      {/* Boutons */}
+      <rect x="-4" y="58" width="5" height="16" rx="2" fill="#8A8F96" />
+      <rect x="-4" y="88" width="5" height="30" rx="2" fill="#8A8F96" />
+      <rect x="-4" y="124" width="5" height="30" rx="2" fill="#8A8F96" />
+      <rect x="159" y="100" width="5" height="44" rx="2" fill="#8A8F96" />
+      {/* Module écouteur / caméra avant / Face ID */}
+      <rect x="42" y="10" width="76" height="22" rx="10" fill="#161616" />
+      <rect x="66" y="13" width="28" height="3" rx="1.5" fill="#4A4A4A" />
+      <circle cx="54" cy="22" r="4.5" fill="#22324D" stroke="#555" />
+      <circle cx="70" cy="23" r="2.5" fill="#3A3A3A" />
+      <circle cx="90" cy="23" r="4.5" fill="#0E0E10" stroke="#555" />
+      <circle cx="106" cy="22" r="3" fill="#3A1F2A" />
+    </>
+  );
+}
+
+function DessinEcran() {
+  return (
+    <>
+      <rect x="150" y="128" width="18" height="34" rx="2" fill="#E8892C" />
+      <path d={rr(0, 0, W, H, 22)} fill="#101010" stroke="#000" />
+      <path d={rr(6, 6, W - 12, H - 12, 17)} fill="url(#frmEcran)" />
+      {[0, 1, 2, 3].map(i => [0, 1, 2, 3, 4].map(j => (
+        <rect key={`${i}${j}`} x={20 + i * 33} y={46 + j * 38} width="22" height="22" rx="6" fill="#fff" opacity=".22" />
+      )))}
+      <rect x="18" y="268" width="124" height="34" rx="12" fill="#fff" opacity=".14" />
+      <rect x="58" y="14" width="44" height="13" rx="6.5" fill="#000" />
+      <rect x="66" y="2.5" width="28" height="2" rx="1" fill="#3A3A3A" />
+      <path d="M0 0 L160 0 L0 210 Z" fill="#fff" opacity=".08" />
+    </>
+  );
+}
+
+const ORDRE = ["arriere", "compo", "chassis", "avant"];
+const DESSINS = { arriere: DessinArriere, compo: DessinComposants, chassis: DessinChassis, avant: DessinEcran };
+const TRANCHES = { arriere: ["#A9A29A", rr(0, 0, W, H, 22)], chassis: ["#5E636A", CADRE], avant: ["#000", rr(0, 0, W, H, 22)] };
+
+// Positions des étiquettes : à hauteur de leur pièce, sans se chevaucher.
+function placerEtiquettes() {
+  const pts = PIECES.map(p => {
+    const [x, y] = proj(p.px, p.py, COUCHES[p.couche]);
+    return { ...p, x, y, ly: y };
+  });
+  for (const cote of ["L", "R"]) {
+    const lst = pts.filter(p => p.cote === cote).sort((a, b) => a.y - b.y);
+    let prec = -Infinity;
+    for (const p of lst) { p.ly = Math.max(p.y, prec + 26); prec = p.ly; }
+  }
+  return pts;
+}
+const ETIQUETTES = placerEtiquettes();
+
+function useEtroit() {
+  const q = "(max-width:700px)";
+  const [etroit, setEtroit] = useState(() => typeof window !== "undefined" && window.matchMedia(q).matches);
+  useEffect(() => {
+    const m = window.matchMedia(q);
+    const f = () => setEtroit(m.matches);
+    m.addEventListener ? m.addEventListener("change", f) : m.addListener(f);
+    return () => (m.removeEventListener ? m.removeEventListener("change", f) : m.removeListener(f));
+  }, []);
+  return etroit;
+}
+
 function VueEclatee() {
   const [sel, setSel] = useState(6);
+  const etroit = useEtroit();
   const p = PIECES.find(x => x.n === sel);
-  const couleur = (n, base) => (n === sel ? "var(--brand)" : base);
-  const couche = (id) => COUCHES.find(c => c.id === id);
+  const coins = [[0, 0], [W, 0], [0, H], [W, H]];
 
   return (
     <div className="frm-ecl">
       <div className="card">
-        <svg className="frm-svg" viewBox="0 0 470 590" role="img" aria-label="Vue éclatée d'un smartphone">
-          {/* Lignes d'assemblage entre les couches */}
-          {[[0, 0], [W, 0], [0, H], [W, H]].map(([x, y], i) => {
-            const [x1, y1] = proj(x, y, COUCHES[0]);
-            const [x2, y2] = proj(x, y, COUCHES[2]);
-            return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="var(--line)" strokeWidth="1.2" strokeDasharray="4 5" />;
+        <svg className="frm-svg" viewBox={etroit ? "140 0 360 840" : "0 0 700 840"} role="img" aria-label="Vue éclatée d'un smartphone">
+          <defs>
+            <linearGradient id="frmMetal" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stopColor="#E4E6E9" /><stop offset=".5" stopColor="#B7BCC2" /><stop offset="1" stopColor="#8E949B" />
+            </linearGradient>
+            <linearGradient id="frmBague" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stopColor="#E9EBEE" /><stop offset="1" stopColor="#7D838A" />
+            </linearGradient>
+            <linearGradient id="frmDos" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stopColor="#EFEBE6" /><stop offset="1" stopColor="#C9C1B8" />
+            </linearGradient>
+            <linearGradient id="frmBatt" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stopColor="#4A4A4C" /><stop offset="1" stopColor="#242426" />
+            </linearGradient>
+            <linearGradient id="frmEcran" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#1C2436" /><stop offset=".6" stopColor="#5A3A3A" /><stop offset="1" stopColor="#E8612C" />
+            </linearGradient>
+            <filter id="frmOmbre" x="-20%" y="-20%" width="140%" height="160%">
+              <feDropShadow dx="0" dy="10" stdDeviation="7" floodColor="#2B2B2B" floodOpacity=".22" />
+            </filter>
+          </defs>
+
+          {/* Lignes d'assemblage */}
+          {coins.map(([x, y], i) => {
+            const [x1, y1] = proj(x, y, COUCHES.avant);
+            const [x2, y2] = proj(x, y, COUCHES.arriere);
+            return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#D6CFC8" strokeWidth="1.2" strokeDasharray="4 5" />;
           })}
 
-          {/* Face arrière */}
-          <g transform={matrice(COUCHES[2])}>
-            <rect className="piece" x="0" y="0" width={W} height={H} rx="22" fill={couleur(11, "#D6CFC8")} stroke="#8A847E" strokeWidth="1.5" onClick={() => setSel(11)} />
-            <rect x="10" y="12" width="56" height="62" rx="12" fill="#B9B1A9" />
-            <circle className="piece" cx="80" cy="170" r="40" fill="none" stroke={couleur(12, "#5A544E")} strokeWidth="7" onClick={() => setSel(12)} />
-            <circle cx="80" cy="170" r="24" fill="none" stroke={couleur(12, "#5A544E")} strokeWidth="5" opacity=".7" />
-          </g>
-
-          {/* Châssis et composants */}
-          <g transform={matrice(COUCHES[1])}>
-            <rect className="piece" x="0" y="0" width={W} height={H} rx="22" fill={couleur(3, "#F0EDEA")} stroke="#5A544E" strokeWidth="2.5" onClick={() => setSel(3)} />
-            <rect className="piece" x="70" y="12" width="78" height="108" rx="6" fill={couleur(4, "#3E6B4F")} onClick={() => setSel(4)} />
-            <rect x="88" y="30" width="26" height="26" rx="3" fill="#2B2B2B" opacity=".75" />
-            <rect x="120" y="70" width="18" height="12" rx="2" fill="#2B2B2B" opacity=".6" />
-            <g className="piece" onClick={() => setSel(5)}>
-              <rect x="10" y="12" width="56" height="62" rx="10" fill={couleur(5, "#4A4A4A")} />
-              <circle cx="26" cy="28" r="10" fill="#1E1E1E" stroke="#8A847E" strokeWidth="2" />
-              <circle cx="50" cy="28" r="10" fill="#1E1E1E" stroke="#8A847E" strokeWidth="2" />
-              <circle cx="26" cy="54" r="10" fill="#1E1E1E" stroke="#8A847E" strokeWidth="2" />
-            </g>
-            <rect className="piece" x="20" y="132" width="120" height="128" rx="8" fill={couleur(6, "#F59E0B")} stroke="#B4881B" strokeWidth="1.5" onClick={() => setSel(6)} />
-            <path className="piece" d="M128 120 L128 132 M136 120 L136 150 L148 150" stroke={couleur(10, "#E8612C")} strokeWidth="5" fill="none" strokeLinecap="round" onClick={() => setSel(10)} />
-            <rect className="piece" x="12" y="272" width="34" height="34" rx="6" fill={couleur(9, "#8A847E")} onClick={() => setSel(9)} />
-            <rect className="piece" x="54" y="276" width="54" height="28" rx="6" fill={couleur(7, "#5A544E")} onClick={() => setSel(7)} />
-            <rect className="piece" x="116" y="272" width="34" height="36" rx="6" fill={couleur(8, "#6E6760")} onClick={() => setSel(8)} />
-          </g>
-
-          {/* Face avant */}
-          <g transform={matrice(COUCHES[0])}>
-            <rect className="piece" x="0" y="0" width={W} height={H} rx="22" fill={couleur(1, "#2B2B2B")} stroke="#1A1A1A" strokeWidth="2" onClick={() => setSel(1)} />
-            <rect x="8" y="8" width={W - 16} height={H - 16} rx="16" fill="#363636" opacity=".55" pointerEvents="none" />
-            <rect className="piece" x="52" y="10" width="56" height="16" rx="8" fill={couleur(2, "#0F0F0F")} stroke="#5A544E" strokeWidth="1" onClick={() => setSel(2)} />
-          </g>
-
-          {/* Titres de couches */}
-          {COUCHES.map(c => {
-            const [x, y] = proj(0, H, c);
-            return <text key={c.id} className="couche" x={x - 14} y={y + 4} textAnchor="end">{c.label}</text>;
-          })}
-
-          {/* Pastilles numérotées */}
-          {PIECES.map(pc => {
-            const [x, y] = proj(pc.px, pc.py, couche(pc.couche));
+          {ORDRE.map(id => {
+            const c = COUCHES[id];
+            const Dessin = DESSINS[id];
+            const pieces = PIECES.filter(x => x.couche === id);
             return (
-              <g key={pc.n} className={`pastille${pc.n === sel ? " on" : ""}`} onClick={() => setSel(pc.n)}>
-                <circle cx={x} cy={y} r="12" />
-                <text x={x} y={y}>{pc.n}</text>
+              <g key={id} filter="url(#frmOmbre)">
+                {TRANCHES[id] && <Tranche c={c} couleur={TRANCHES[id][0]} d={TRANCHES[id][1]} />}
+                <g transform={matrice(c)}>
+                  <Dessin />
+                  {pieces.filter(x => x.n === sel).map(x => (
+                    x.hit.trait
+                      ? <path key="hl" d={x.hit.d} stroke="#E8612C" strokeWidth="11" strokeOpacity=".55" fill="none" strokeLinecap="round" pointerEvents="none" />
+                      : <Zone key="hl" hit={x.hit} fill="rgba(232,97,44,.22)" stroke="#E8612C" strokeWidth="3" pointerEvents="none" />
+                  ))}
+                  {pieces.map(x => (
+                    x.hit.trait
+                      ? <path key={x.n} d={x.hit.d} stroke="transparent" strokeWidth="14" fill="none" style={{ cursor: "pointer" }} onClick={() => setSel(x.n)} />
+                      : <Zone key={x.n} hit={x.hit} fill="transparent" style={{ cursor: "pointer" }} onClick={() => setSel(x.n)} />
+                  ))}
+                </g>
               </g>
             );
           })}
+
+          {/* Étiquettes (grand écran) */}
+          {!etroit && ETIQUETTES.map(e => {
+            const on = e.n === sel;
+            const gauche = e.cote === "L";
+            const xt = gauche ? 146 : 514;
+            return (
+              <g key={`e${e.n}`} style={{ cursor: "pointer" }} onClick={() => setSel(e.n)}>
+                <polyline points={`${xt + (gauche ? 4 : -4)},${e.ly} ${gauche ? 160 : 500},${e.ly} ${e.x},${e.y}`}
+                  fill="none" stroke={on ? "#E8612C" : "#8A847E"} strokeWidth={on ? 1.6 : 1} />
+                <text x={xt} y={e.ly} textAnchor={gauche ? "end" : "start"} dominantBaseline="central"
+                  fontSize="12.5" fontWeight={on ? 800 : 600} fill={on ? "#C2481B" : "#2B2B2B"}>
+                  {gauche ? `${e.court}  ${e.n}` : `${e.n}  ${e.court}`}
+                </text>
+              </g>
+            );
+          })}
+
+          {/* Pastilles numérotées */}
+          {ETIQUETTES.map(e => (
+            <g key={`p${e.n}`} className={`pastille${e.n === sel ? " on" : ""}`} onClick={() => setSel(e.n)}>
+              <circle cx={e.x} cy={e.y} r={etroit ? 13 : 10} />
+              <text x={e.x} y={e.y} style={etroit ? { fontSize: 13 } : { fontSize: 10.5 }}>{e.n}</text>
+            </g>
+          ))}
         </svg>
         <div className="frm-liste">
           {PIECES.map(pc => (
             <button key={pc.n} className={pc.n === sel ? "on" : ""} onClick={() => setSel(pc.n)}>
-              {pc.n}. {pc.nom.split(" (")[0]}
+              {pc.n}. {pc.court}
             </button>
           ))}
         </div>
       </div>
 
       <div className="card frm-fiche" aria-live="polite">
-        <span className="lbl">{COUCHES.find(c => c.id === p.couche).label}</span>
+        <span className="lbl">{COUCHES[p.couche].label}</span>
         <h3><span className="num">{p.n}</span>{p.nom}</h3>
         <dl>
           <div><dt>À quoi ça sert</dt><dd>{p.role}</dd></div>
