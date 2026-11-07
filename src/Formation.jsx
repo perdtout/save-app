@@ -2,12 +2,13 @@
 // Formation nouvel arrivant — les bases de la réparation (famille « Formation »)
 //
 // Écran statique : aucune donnée serveur, il s'affiche même si le backend dort.
-// Cinq onglets :
+// Six onglets :
 //   1. Vue éclatée   — schéma interactif d'un smartphone, rôle de chaque pièce
 //   2. Poste & ESD   — tapis, bracelet, outils, gants, tenue SAVE, vêtements à éviter
 //   3. Règles d'or   — l'ordre de réparation (batterie d'abord, test avant collage)
-//   4. Check-list    — à cocher avant / pendant / après chaque intervention
-//   5. Quiz          — 10 questions pour valider les acquis avec le responsable
+//   4. IMEI          — ce que c'est, où le trouver (*#06#), où l'inscrire
+//   5. Check-list    — à cocher avant / pendant / après chaque intervention
+//   6. Quiz          — 12 questions pour valider les acquis avec le responsable
 //
 // Ton : Thomas (RZ) qui parle directement à l'arrivant, en le tutoyant.
 // ═══════════════════════════════════════════════════════════════════════════
@@ -86,6 +87,19 @@ const CSS = `
 .frm-q .expl{margin-top:10px;font-size:13px;color:var(--sub)}
 .frm-score{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
 .frm-score b{font-size:28px;letter-spacing:-.02em}
+.frm-imei-top{display:grid;grid-template-columns:minmax(0,1fr) 250px;gap:18px;align-items:start}
+@media(max-width:700px){.frm-imei-top{grid-template-columns:1fr}.frm-tel{margin:0 auto}}
+.frm-tel{width:250px;background:var(--ink);border-radius:34px;padding:14px;box-shadow:var(--shadow-lift)}
+.frm-tel-ecran{background:#111;border-radius:22px;padding:16px 14px 10px;color:#fff;text-align:center}
+.frm-tel-ecran .saisie{display:block;font-size:30px;font-weight:300;letter-spacing:.08em;color:#fff}
+.frm-tel-ecran .res{margin:10px 0 4px;background:#222;border-radius:12px;padding:10px;display:flex;flex-direction:column;
+  font-variant-numeric:tabular-nums;font-size:14px;letter-spacing:.03em}
+.frm-tel-ecran .res b{font-size:11px;color:var(--brand-light);letter-spacing:.08em}
+.frm-tel-ecran small{color:rgba(255,255,255,.4);font-size:10px}
+.frm-tel-clav{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;padding:14px 10px 6px}
+.frm-tel-clav span{aspect-ratio:1;border-radius:50%;background:#3A3A3A;color:#fff;display:flex;align-items:center;
+  justify-content:center;font-size:20px;font-weight:500}
+.frm-tel-clav span.on{background:var(--brand)}
 `;
 
 // ─── Vue éclatée ─────────────────────────────────────────────────────────────
@@ -544,7 +558,7 @@ function PosteEsd() {
 
 // ─── Règles d'or ─────────────────────────────────────────────────────────────
 const ETAPES = [
-  { t: "Prise en charge et test d'entrée", d: "Avec le client devant toi : tu testes ce qui fonctionne (écran, tactile, son, caméras, charge, Face ID / empreinte) et tu notes l'état extérieur dans Trepidai.",
+  { t: "Prise en charge et test d'entrée", d: "Avec le client devant toi : tu relèves l'IMEI (*#06#), tu testes ce qui fonctionne (écran, tactile, son, caméras, charge, Face ID / empreinte) et tu notes le tout avec l'état extérieur dans Trepidai.",
     pq: "Ce qui n'est pas noté à l'entrée deviendra « c'est vous qui l'avez cassé » à la sortie." },
   { t: "Éteindre le téléphone", d: "On ne démonte jamais un téléphone allumé. Retire la carte SIM et la coque du client, range-les dans le bac de la fiche." },
   { t: "Ouvrir proprement", d: "Chaleur douce, ventouse, médiator. Tu avances doucement en surveillant les nappes : sur la plupart des modèles, elles sont d'un seul côté et très courtes." },
@@ -583,6 +597,118 @@ function ReglesOr() {
   );
 }
 
+// ─── IMEI ────────────────────────────────────────────────────────────────────
+const TOUCHES = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#"];
+
+function Clavier() {
+  return (
+    <div className="frm-tel" aria-label="Composer *#06# sur le clavier d'appel">
+      <div className="frm-tel-ecran">
+        <span className="saisie">*#06#</span>
+        <div className="res">
+          <b>IMEI</b>
+          <span>35 209811 456789 2</span>
+          <b style={{ marginTop: 6 }}>IMEI 2</b>
+          <span>35 209811 987654 7</span>
+        </div>
+        <small>Exemple fictif</small>
+      </div>
+      <div className="frm-tel-clav">
+        {TOUCHES.map(t => (
+          <span key={t} className={["*", "#", "0", "6"].includes(t) ? "on" : ""}>{t}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const OU_IMEI = [
+  { ico: "📞", t: "Code *#06#", d: "Sur le clavier d'appel, tape *#06#. L'IMEI s'affiche tout de suite, sans appeler, même sans carte SIM. Ça marche sur tous les téléphones, iPhone comme Android.", top: true },
+  { ico: "⚙️", t: "Dans les réglages", d: "iPhone : Réglages › Général › Informations. Android : Paramètres › À propos du téléphone (parfois › État ou Informations sur le téléphone)." },
+  { ico: "🗂️", t: "Sur le tiroir SIM", d: "Sur beaucoup d'iPhone, l'IMEI est gravé sur le tiroir SIM. Pratique quand l'écran est mort, mais vérifie avec une autre source : un tiroir peut avoir été échangé." },
+  { ico: "📦", t: "Boîte et facture d'achat", d: "Étiquette code-barres sur la boîte d'origine et ligne IMEI sur la facture d'achat du client." },
+  { ico: "🔋", t: "Sous la batterie (anciens modèles)", d: "Sur les téléphones à batterie amovible, une étiquette IMEI se trouve dans le logement de la batterie." },
+  { ico: "☁️", t: "Compte du client", d: "Écran cassé et pas de boîte : le client le retrouve dans son compte Apple (liste de ses appareils) ou Google, depuis un autre appareil." },
+];
+
+function Imei() {
+  return (
+    <div className="stack">
+      <div className="frm-imei-top">
+        <div className="card">
+          <span className="lbl">C'est quoi ?</span>
+          <h3 style={{ margin: "4px 0 8px", fontSize: 19 }}>L'IMEI, la carte d'identité du téléphone</h3>
+          <p style={{ margin: "0 0 10px", fontSize: 14 }}>
+            L'IMEI (International Mobile Equipment Identity) est un numéro de <b>15 chiffres</b>, unique au monde, attribué
+            à chaque téléphone. Il identifie l'appareil, pas la ligne : il ne change pas quand le client change de carte SIM
+            ou d'opérateur. Un téléphone double SIM en a <b>deux</b>.
+          </p>
+          <p style={{ margin: 0, fontSize: 14 }}>
+            Il est lié à la carte mère. C'est grâce à lui qu'un opérateur peut bloquer un téléphone déclaré volé, et qu'on
+            prouve que l'appareil qu'on rend est bien celui qu'on a reçu.
+          </p>
+          <div className="frm-pourquoi" style={{ marginTop: 16 }}>
+            <b>Règle chez nous : pas d'IMEI, pas de dossier.</b> On le relève à la prise en charge avec le téléphone en
+            main (pas sur la parole du client) et on le recopie <b>chiffre par chiffre</b>, en le relisant. Il doit figurer
+            dans le dossier, sur le devis et sur la facture.
+          </div>
+        </div>
+        <Clavier />
+      </div>
+
+      <div className="frm-grid" style={{ gridTemplateColumns: "repeat(auto-fill,minmax(210px,1fr))" }}>
+        {[
+          ["🧾", "Dans le dossier de prise en charge", "Saisi dans Trepidai dès l'entrée. C'est ce qui relie la fiche au téléphone posé sur ton établi."],
+          ["📝", "Sur le devis", "Le devis porte sur un appareil précis. Sans IMEI, le client peut contester que c'était le sien."],
+          ["💶", "Sur la facture", "Indispensable pour la garantie de la réparation, la Garantie Plus et toute réclamation ultérieure."],
+          ["🛡️", "Pour un sinistre ATM", "N° de sinistre, IMEI, modèle : une seule erreur d'IMEI et le paiement du dossier est bloqué."],
+        ].map(([ico, t, d]) => (
+          <div key={t} className="frm-carte brand">
+            <div className="ico">{ico}</div>
+            <h4>{t}</h4>
+            <p>{d}</p>
+          </div>
+        ))}
+      </div>
+
+      <div>
+        <h3 className="h-section" style={{ marginTop: 6 }}>Où le trouver</h3>
+        <div className="frm-grid">
+          {OU_IMEI.map(o => (
+            <div key={o.t} className={`frm-carte${o.top ? " ok" : ""}`}>
+              <div className="ico">{o.ico}</div>
+              <h4>{o.t}{o.top && <span className="frm-badge" style={{ background: "var(--ok)" }}>Le plus fiable</span>}</h4>
+              <p>{o.d}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="frm-grid">
+        <div className="frm-carte bad">
+          <div className="ico">⚠️</div>
+          <h4>Les pièges</h4>
+          <ul>
+            <li>Confondre l'IMEI avec le numéro de série : ce n'est pas le même numéro.</li>
+            <li>Ne noter qu'un seul IMEI sur un double SIM : on note l'IMEI 1, et les deux si le dossier le demande.</li>
+            <li>Recopier depuis le tiroir SIM sans vérifier : il a pu être échangé.</li>
+            <li>Un IMEI absent, à zéro ou différent entre *#06# et les réglages : on s'arrête et on me prévient.</li>
+          </ul>
+        </div>
+        <div className="frm-carte brand">
+          <div className="ico">♻️</div>
+          <h4>Mobile d'occasion</h4>
+          <ul>
+            <li>À chaque rachat ou reprise, on relève l'IMEI avant toute chose.</li>
+            <li>On vérifie que le téléphone n'est pas déclaré volé ou bloqué avant de l'accepter.</li>
+            <li>L'IMEI figure sur la facture de vente du mobile d'occasion.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Check-list ──────────────────────────────────────────────────────────────
 const CHECK = [
   { titre: "Avant d'ouvrir", items: [
@@ -591,6 +717,7 @@ const CHECK = [
     "Tapis ESD branché à la terre, propre",
     "Bracelet antistatique au poignet et relié",
     "Gants ESD mis",
+    "IMEI relevé (*#06#) et saisi dans Trepidai",
     "Test d'entrée fait et noté dans Trepidai",
     "Téléphone éteint, SIM et coque retirées",
   ] },
@@ -607,6 +734,7 @@ const CHECK = [
     "Batterie de nouveau déconnectée",
     "Joint / adhésif neuf posé, collage",
     "Test de sortie complet et saisie Trepidai",
+    "IMEI présent sur le devis et la facture",
   ] },
 ];
 
@@ -678,6 +806,12 @@ const QUIZ = [
   { q: "Après un changement d'écran, le client se plaint que l'écran reste allumé pendant ses appels et qu'il raccroche avec la joue. Quelle pièce vérifies-tu ?",
     o: ["Le haut-parleur du bas", "Le capteur de proximité", "La batterie", "Le moteur vibreur"], r: 1,
     e: "Le capteur de proximité éteint l'écran contre l'oreille. Nappe pincée ou capteur mal repositionné : c'est le premier suspect." },
+  { q: "Comment obtiens-tu l'IMEI d'un téléphone qui s'allume ?",
+    o: ["Je demande au client de me le dicter", "Je tape *#06# sur le clavier d'appel", "Je regarde le numéro de série au dos", "Je l'invente si le client est pressé"], r: 1,
+    e: "*#06# affiche l'IMEI sur tous les téléphones, même sans SIM. C'est la source la plus fiable." },
+  { q: "Où l'IMEI doit-il obligatoirement figurer ?",
+    o: ["Uniquement sur la facture", "Dans le dossier Trepidai, sur le devis et sur la facture", "Nulle part, le modèle suffit", "Seulement pour les sinistres ATM"], r: 1,
+    e: "Dossier, devis, facture : c'est ce qui prouve quel appareil on a reçu, réparé et rendu." },
   { q: "Pourquoi faire un test d'entrée devant le client ?",
     o: ["Pour remplir le temps d'attente", "Pour noter ce qui fonctionne et l'état du téléphone avant intervention", "Ce n'est pas utile si le client est pressé", "Pour vendre un accessoire"], r: 1,
     e: "Ce qui n'est pas constaté à l'entrée ne peut pas être défendu à la sortie." },
@@ -700,7 +834,7 @@ function Quiz() {
           <div style={{ flex: 1, minWidth: 220, fontSize: 14 }}>
             {score === QUIZ.length
               ? "Sans faute, bravo. Montre ce score à ton responsable, tu peux passer à la pratique encadrée."
-              : score >= 8
+              : score >= 10
                 ? "Bonne base. Relis les questions en rouge avec ton responsable avant ta première réparation seul."
                 : "Pas encore. Reprends les onglets Règles d'or et Poste & ESD, puis refais le quiz."}
           </div>
@@ -736,6 +870,7 @@ const ONGLETS = [
   { id: "eclate",  label: "Vue éclatée" },
   { id: "esd",     label: "Poste & ESD" },
   { id: "regles",  label: "Règles d'or" },
+  { id: "imei",    label: "IMEI" },
   { id: "check",   label: "Check-list" },
   { id: "quiz",    label: "Quiz" },
 ];
@@ -768,6 +903,7 @@ export default function Formation() {
       {onglet === "eclate" && <VueEclatee />}
       {onglet === "esd"    && <PosteEsd />}
       {onglet === "regles" && <ReglesOr />}
+      {onglet === "imei"   && <Imei />}
       {onglet === "check"  && <CheckList />}
       {onglet === "quiz"   && <Quiz />}
     </div>
