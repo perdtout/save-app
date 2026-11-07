@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, Fragment } from "react";
 import logoRepairMobile from "./RepairMobile.png";
 import Alternance from "./Alternance.jsx";
 import Tarifs from "./Tarifs.jsx";
+import Formation from "./Formation.jsx";
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  CONFIGURATION
@@ -3373,7 +3374,7 @@ export default function App() {
     { id: "anim", label: "Animer", hint: "Les équipes", ecrans: [
         { id: "goat",   label: "GOAT" },
         { id: "visits", label: "Visites" },
-      { id: "alternance", label: "Alternance" },
+        { id: "alternance", label: "Alternance" },
       ] },
     { id: "comptoir", label: "Au comptoir", hint: "Les outils du quotidien", ecrans: [
         { id: "tarifs",  label: "Tarifs" },
@@ -3381,10 +3382,13 @@ export default function App() {
         { id: "process", label: "Process" },
         { id: "guide",   label: "Guide Mobileo" },
       ] },
+    { id: "former", label: "Formation", hint: "Apprendre le métier", ecrans: [
+        { id: "formation", label: "Bases de la réparation" },
+      ] },
   ];
   const famillesOrdonnees = user.role === "rz"
     ? FAMILLES
-    : [FAMILLES[2], FAMILLES[1], FAMILLES[0]];
+    : [FAMILLES[2], FAMILLES[3], FAMILLES[1], FAMILLES[0]];
   const familleDe = (p) => (FAMILLES.find(f => f.ecrans.some(e => e.id === p)) || FAMILLES[0]).id;
   const familleActive = familleDe(page);
   const ecransFamille = (FAMILLES.find(f => f.id === familleActive) || FAMILLES[0]);
@@ -3460,6 +3464,8 @@ export default function App() {
           <GuidePage />
         ) : page === "tarifs" ? (
           <Tarifs user={user} api={api} />
+        ) : page === "formation" ? (
+          <Formation />
         ) : (
           <>
             {serverState !== "ok" && (
