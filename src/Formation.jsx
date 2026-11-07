@@ -7,7 +7,7 @@
 //   2. Poste & ESD   — tapis, bracelet, outils, gants, tenue SAVE, vêtements à éviter
 //   3. Règles d'or   — l'ordre de réparation (batterie d'abord, test avant collage)
 //   4. Check-list    — à cocher avant / pendant / après chaque intervention
-//   5. Quiz          — 8 questions pour valider les acquis avec le responsable
+//   5. Quiz          — 10 questions pour valider les acquis avec le responsable
 //
 // Ton : Thomas (RZ) qui parle directement à l'arrivant, en le tutoyant.
 // ═══════════════════════════════════════════════════════════════════════════
@@ -116,73 +116,86 @@ const PIECES = [
     role: "Affiche l'image (dalle OLED ou LCD) et capte le toucher (couche tactile). La vitre de protection est collée dessus : on change l'ensemble, pas la vitre seule.",
     panne: "Vitre cassée, taches ou lignes, tactile fantôme ou mort, écran noir alors que le téléphone sonne.",
     attention: "Ouverture à la chaleur et au médiator, jamais en force : les nappes de l'écran sont fragiles et courtes. Sur iPhone, compare l'origine et le compatible (Bolt / Spark) avec le client avant de commander." },
-  { n: 2, couche: "chassis", court: "Caméra avant & Face ID", cote: "R", px: 100, py: 20,
-    hit: { rect: [42, 10, 76, 22, 10] },
-    nom: "Écouteur, caméra avant & capteurs (Face ID)",
-    role: "L'écouteur sert aux appels. La caméra avant fait les selfies. Les capteurs éteignent l'écran contre l'oreille, règlent la luminosité et gèrent la reconnaissance faciale.",
-    panne: "Son faible en appel, écran qui ne s'éteint pas pendant un appel, Face ID indisponible.",
-    attention: "Ces éléments se transfèrent de l'ancien écran vers le neuf. Face ID est appairé à la carte mère : une nappe abîmée = Face ID perdu définitivement. Zéro précipitation sur cette étape." },
-  { n: 3, couche: "chassis", court: "Châssis (cadre)", cote: "L", px: 4, py: 200,
+  { n: 4, couche: "chassis", court: "Caméra avant & Face ID", cote: "L", px: 44, py: 34,
+    hit: { rect: [36, 25, 88, 17, 8] },
+    nom: "Caméra avant & module Face ID",
+    role: "La caméra avant fait les selfies et les visios. Sur iPhone, le module Face ID (projecteur de points + caméra infrarouge) sert au déverrouillage par le visage.",
+    panne: "Selfie flou ou noir, « Face ID indisponible », déverrouillage facial qui ne marche plus après une chute.",
+    attention: "Face ID est appairé à la carte mère : il ne se remplace pas chez nous. Une nappe abîmée = Face ID perdu définitivement. On le teste à l'entrée devant le client et on le manipule sans aucune précipitation." },
+  { n: 2, couche: "chassis", court: "Écouteur (earpiece)", cote: "L", px: 90, py: 16,
+    hit: { rect: [56, 11, 44, 11, 5] },
+    nom: "Écouteur interne (earpiece)",
+    role: "Le petit haut-parleur du haut : c'est lui qu'on entend quand on téléphone avec l'appareil collé à l'oreille. Sur beaucoup de modèles, il sert aussi de 2ᵉ haut-parleur en stéréo.",
+    panne: "Le client entend mal ou plus du tout en appel alors que le haut-parleur du bas fonctionne, son grésillant, grille encrassée.",
+    attention: "Sur un changement d'écran, on vérifie qu'il est bien remonté et que sa grille n'est pas bouchée par la colle. Test obligatoire : un appel de contrôle, téléphone à l'oreille, avant de rendre l'appareil." },
+  { n: 3, couche: "chassis", court: "Capteur luminosité", cote: "R", px: 120, py: 16,
+    hit: { rect: [104, 11, 24, 11, 4] },
+    nom: "Capteur de luminosité & de proximité",
+    role: "Le capteur de luminosité règle automatiquement la luminosité de l'écran. Le capteur de proximité éteint l'écran quand le téléphone est contre l'oreille, pour éviter de raccrocher avec la joue.",
+    panne: "Luminosité automatique qui ne marche plus, écran qui reste allumé (ou noir) pendant un appel, appels raccrochés tout seuls.",
+    attention: "Souvent sur une petite nappe à transférer de l'ancien écran vers le neuf. Une nappe pincée ou un capteur mal positionné = écran noir en appel. Test : appel de contrôle + main devant le capteur." },
+  { n: 5, couche: "chassis", court: "Châssis (cadre)", cote: "L", px: 4, py: 200,
     hit: { d: CADRE },
     nom: "Châssis (cadre)",
     role: "La structure du téléphone : il porte tous les composants, les boutons et souvent les antennes intégrées au cadre (les petites bandes plastique sur le métal).",
     panne: "Cadre tordu après une chute (l'écran neuf ne se pose plus à plat), boutons enfoncés.",
     attention: "Un cadre tordu fait casser l'écran neuf à la pose. Contrôle-le avant de commander la pièce et préviens le client." },
-  { n: 4, couche: "compo", court: "Carte mère", cote: "R", px: 108, py: 40,
+  { n: 6, couche: "compo", court: "Carte mère", cote: "R", px: 108, py: 40,
     hit: { rect: [66, 10, 84, 108, 6] },
     nom: "Carte mère",
     role: "Le cerveau : processeur, mémoire (les données du client), gestion de l'alimentation et du réseau. Tous les connecteurs de nappes y arrivent.",
     panne: "Ne s'allume plus, redémarre en boucle, pas de réseau, ne charge pas malgré un connecteur neuf.",
     attention: "La pièce la plus chère et la plus fragile. Aucun outil métal posé dessus batterie branchée. La micro-soudure se fait uniquement à Dijon : on oriente le client, on ne bricole pas." },
-  { n: 5, couche: "compo", court: "Caméras arrière", cote: "L", px: 12, py: 64,
+  { n: 7, couche: "compo", court: "Caméras arrière", cote: "L", px: 12, py: 64,
     hit: { rect: [10, 10, 52, 60, 10] },
     nom: "Caméras arrière",
     role: "Le bloc photo arrière (grand-angle, ultra grand-angle, téléobjectif selon le modèle), relié à la carte mère par sa nappe.",
     panne: "Photo floue, écran noir dans l'appli, bruit de vibration (stabilisateur), lentille arrière fêlée.",
     attention: "Ne jamais toucher l'optique avec les doigts. Sur les iPhone récents, une caméra neuve peut afficher « pièce inconnue » : on l'annonce au client avant." },
-  { n: 6, couche: "compo", court: "Batterie", cote: "L", px: 24, py: 200,
+  { n: 8, couche: "compo", court: "Batterie", cote: "L", px: 24, py: 200,
     hit: { rect: [18, 128, 124, 130, 8] },
     nom: "Batterie",
     role: "Stocke l'énergie. Elle alimente tout, y compris quand le téléphone semble éteint.",
     panne: "Autonomie faible, extinctions à 20-30 %, batterie gonflée qui soulève l'écran.",
     attention: "TOUJOURS la déconnecter en premier, avec un outil plastique. Gonflée ou percée : on ne force pas, on ne perce pas, on ne chauffe pas — on isole dans le bac de sécurité et on me prévient." },
-  { n: 7, couche: "compo", court: "Connecteur de charge", cote: "R", px: 82, py: 300,
+  { n: 9, couche: "compo", court: "Connecteur de charge", cote: "R", px: 82, py: 300,
     hit: { rect: [56, 266, 52, 42, 4] },
     nom: "Connecteur de charge (sous-carte + micro)",
     role: "Prise de charge et de données. Sur beaucoup de modèles, la sous-carte porte aussi le micro principal.",
     panne: "Ne charge plus ou par intermittence, câble qui tient mal, micro qui ne marche plus en appel.",
     attention: "Toujours tenter un nettoyage (outil non conducteur) avant de vendre un remplacement : une peluche de poche suffit à bloquer la charge." },
-  { n: 8, couche: "compo", court: "Haut-parleur", cote: "R", px: 140, py: 300,
+  { n: 10, couche: "compo", court: "Haut-parleur", cote: "R", px: 140, py: 300,
     hit: { rect: [112, 268, 36, 38, 6] },
     nom: "Haut-parleur",
     role: "Son des sonneries, de la musique et du haut-parleur en appel.",
     panne: "Son grésillant, faible ou absent, grille bouchée.",
     attention: "Vérifie le son avant démontage pour ne pas te faire reprocher une panne déjà existante." },
-  { n: 9, couche: "compo", court: "Moteur vibreur", cote: "L", px: 18, py: 296,
+  { n: 11, couche: "compo", court: "Moteur vibreur", cote: "L", px: 18, py: 296,
     hit: { rect: [14, 268, 36, 36, 5] },
     nom: "Moteur vibreur",
     role: "Produit les vibrations et le retour haptique.",
     panne: "Plus de vibration, bruit de cliquetis.",
     attention: "Petit, souvent maintenu par des vis de longueurs différentes : range-les à part." },
-  { n: 10, couche: "compo", court: "Nappes", cote: "R", px: 152, py: 180,
+  { n: 12, couche: "compo", court: "Nappes", cote: "R", px: 152, py: 180,
     hit: { d: NAPPE, trait: true },
     nom: "Nappes & connecteurs",
     role: "Les « câbles » plats (en orange sur le schéma) qui relient chaque pièce à la carte mère, clipsés sur des connecteurs dorés.",
     panne: "Une nappe mal clipsée ou pincée suffit à donner « écran noir » ou « tactile mort » après réparation.",
-    attention: "On déclipse à la verticale avec une spatule plastique, jamais en tirant sur la nappe. On reclipse bien à plat, sans forcer." },
-  { n: 11, couche: "arriere", court: "Vitre arrière", cote: "L", px: 24, py: 250,
+    attention: "On déclipse à la verticale avec une spatule plastique, jamais en tirant sur la nappe. On reclipse bien à plat, sans forcer. Chaque déclipsage fatigue le connecteur : on ne déconnecte que ce qui est nécessaire." },
+  { n: 13, couche: "arriere", court: "Vitre arrière", cote: "L", px: 24, py: 250,
     hit: { rect: [0, 0, W, H, 22] },
     nom: "Vitre arrière / coque",
     role: "Ferme le téléphone et protège l'intérieur. Sur la plupart des modèles récents, c'est du verre collé, avec l'îlot des objectifs photo.",
     panne: "Vitre éclatée, coupures, poussière qui rentre.",
     attention: "Vitres arrière Apple de l'onglet « Prix fixes » des tarifs : faisables uniquement à Pontarlier. Les autres se font dans tous les magasins." },
-  { n: 12, couche: "arriere", court: "Charge sans fil / NFC", cote: "R", px: 118, py: 170,
+  { n: 14, couche: "arriere", court: "Charge sans fil / NFC", cote: "R", px: 118, py: 170,
     hit: { circle: [80, 170, 46] },
     nom: "Bobine charge sans fil / NFC",
     role: "La bobine en cuivre permet la charge sans fil (et l'aimantation MagSafe sur iPhone) ; l'antenne NFC permet le paiement sans contact.",
     panne: "Charge sans fil ou paiement mobile qui ne fonctionnent plus après une chute ou une réparation.",
     attention: "Souvent collée sous la vitre arrière : à décoller doucement, elle se déchire facilement." },
 ];
+PIECES.sort((x, y) => x.n - y.n);
 
 // Forme d'une zone cliquable / de surbrillance, dans le repère de la couche.
 function Zone({ hit, ...props }) {
@@ -283,13 +296,20 @@ function DessinChassis() {
       <rect x="-4" y="88" width="5" height="30" rx="2" fill="#8A8F96" />
       <rect x="-4" y="124" width="5" height="30" rx="2" fill="#8A8F96" />
       <rect x="159" y="100" width="5" height="44" rx="2" fill="#8A8F96" />
-      {/* Module écouteur / caméra avant / Face ID */}
-      <rect x="42" y="10" width="76" height="22" rx="10" fill="#161616" />
-      <rect x="66" y="13" width="28" height="3" rx="1.5" fill="#4A4A4A" />
-      <circle cx="54" cy="22" r="4.5" fill="#22324D" stroke="#555" />
-      <circle cx="70" cy="23" r="2.5" fill="#3A3A3A" />
-      <circle cx="90" cy="23" r="4.5" fill="#0E0E10" stroke="#555" />
-      <circle cx="106" cy="22" r="3" fill="#3A1F2A" />
+      {/* Écouteur interne (earpiece) */}
+      <rect x="56" y="11" width="44" height="11" rx="5.5" fill="#1A1A1A" stroke="#555" strokeWidth=".8" />
+      {[0, 1, 2, 3, 4, 5, 6, 7, 8].map(i => <circle key={i} cx={61 + i * 4.3} cy="16.5" r="1.1" fill="#6E6760" />)}
+      {/* Capteur luminosité & proximité */}
+      <rect x="104" y="11" width="24" height="11" rx="4" fill="#202020" stroke="#555" strokeWidth=".8" />
+      <circle cx="111" cy="16.5" r="2.6" fill="#3A1F2A" />
+      <circle cx="121" cy="16.5" r="2.6" fill="#2C2C2C" stroke="#777" strokeWidth=".6" />
+      {/* Caméra avant & Face ID */}
+      <rect x="36" y="25" width="88" height="17" rx="8.5" fill="#161616" />
+      <circle cx="48" cy="33.5" r="4.3" fill="#22324D" stroke="#555" />
+      <circle cx="64" cy="33.5" r="2.4" fill="#3A3A3A" />
+      <circle cx="96" cy="33.5" r="4.8" fill="#0E0E10" stroke="#666" />
+      <circle cx="95" cy="32.3" r="1.2" fill="#fff" opacity=".7" />
+      <circle cx="113" cy="33.5" r="3" fill="#3A1F2A" />
     </>
   );
 }
@@ -343,7 +363,7 @@ function useEtroit() {
 }
 
 function VueEclatee() {
-  const [sel, setSel] = useState(6);
+  const [sel, setSel] = useState(8);
   const etroit = useEtroit();
   const p = PIECES.find(x => x.n === sel);
   const coins = [[0, 0], [W, 0], [0, H], [W, H]];
@@ -351,7 +371,7 @@ function VueEclatee() {
   return (
     <div className="frm-ecl">
       <div className="card">
-        <svg className="frm-svg" viewBox={etroit ? "140 0 360 840" : "0 0 700 840"} role="img" aria-label="Vue éclatée d'un smartphone">
+        <svg className="frm-svg" viewBox={etroit ? "140 0 360 840" : "-24 0 724 840"} role="img" aria-label="Vue éclatée d'un smartphone">
           <defs>
             <linearGradient id="frmMetal" x1="0" y1="0" x2="1" y2="1">
               <stop offset="0" stopColor="#E4E6E9" /><stop offset=".5" stopColor="#B7BCC2" /><stop offset="1" stopColor="#8E949B" />
@@ -532,8 +552,10 @@ const ETAPES = [
     pq: "Batterie branchée, un connecteur qui touche de travers suffit à griller un rétroéclairage, un circuit de charge ou toute la carte mère. C'est la règle n°1, sans exception." },
   { t: "Ranger les vis dans l'ordre", d: "Chaque vis a sa place et sa longueur. Tapis magnétique ou boîte à cases, dans l'ordre du démontage.",
     pq: "Une vis trop longue remise au mauvais endroit peut percer la carte mère." },
+  { t: "Basculer les composants : le minimum de nappes", d: "Quand l'écran neuf est livré avec son châssis et qu'il faut basculer la carte mère, le connecteur de charge, les caméras ou le haut-parleur : tu ne déconnectes que les nappes strictement nécessaires. Quand deux éléments peuvent passer ensemble d'un châssis à l'autre en restant reliés, tu les laisses reliés.",
+    pq: "Chaque fois qu'on débranche et rebranche une nappe, on fatigue le connecteur et on risque de le tordre ou de l'arracher. Moins de manipulations = moins de pannes créées par nous." },
   { t: "Remplacer la pièce", d: "Pièce neuve sortie de son sachet antistatique au dernier moment. Transfère les éléments à récupérer (capteurs, caches, adhésifs) sans forcer." },
-  { t: "Tester AVANT le remontage complet et le collage", cle: true, d: "Tu branches la pièce neuve, tu reconnectes la batterie, tu allumes et tu testes tout : affichage, tactile sur toute la surface, luminosité, son, caméras, Face ID, charge. Si c'est bon : batterie à nouveau déconnectée, puis seulement fermeture et collage.",
+  { t: "Tester AVANT le remontage complet et le collage", cle: true, d: "Tu branches la pièce neuve, tu reconnectes la batterie, tu allumes et tu testes tout : affichage, tactile sur toute la surface, luminosité automatique, son, appel de contrôle (écouteur + capteur de proximité), caméras, Face ID, charge. Si c'est bon : batterie à nouveau déconnectée, puis seulement fermeture et collage.",
     pq: "Une pièce neuve peut être défectueuse. Si tu as déjà collé, tu redémontes, tu risques de casser l'écran et tu perds un joint. On teste d'abord, on colle ensuite." },
   { t: "Fermer, coller, tester de nouveau", d: "Joint neuf, vis à leur place, pression uniforme. Test de sortie complet, idéalement devant le client, puis saisie de la réparation dans Trepidai." },
 ];
@@ -542,7 +564,7 @@ function ReglesOr() {
   return (
     <div className="stack">
       <div className="frm-pourquoi">
-        L'ordre compte autant que le geste. Les étapes <b>4</b> et <b>7</b> sont non négociables : ce sont elles qui
+        L'ordre compte autant que le geste. Les étapes <b>4</b> et <b>8</b> sont non négociables : ce sont elles qui
         évitent la plupart des retours atelier et des cartes mères grillées.
       </div>
       <div className="frm-etapes">
@@ -576,10 +598,12 @@ const CHECK = [
     "Batterie déconnectée en premier, outil plastique",
     "Vis rangées dans l'ordre du démontage",
     "Nappes déclipsées à la verticale, sans tirer",
+    "Bascule châssis : seulement les nappes nécessaires déconnectées",
     "Pièce neuve sortie du sachet au dernier moment",
   ] },
   { titre: "Avant de fermer", items: [
     "Pièce neuve branchée, batterie reconnectée, test complet OK",
+    "Appel de contrôle : écouteur et capteur de proximité OK",
     "Batterie de nouveau déconnectée",
     "Joint / adhésif neuf posé, collage",
     "Test de sortie complet et saisie Trepidai",
@@ -648,6 +672,12 @@ const QUIZ = [
   { q: "Pourquoi ranger les vis dans l'ordre du démontage ?",
     o: ["Pour faire propre", "Parce qu'une vis trop longue au mauvais endroit peut percer la carte mère", "Pour en avoir en stock", "Ça n'a pas d'importance"], r: 1,
     e: "Les vis n'ont pas toutes la même longueur. Une erreur de placement peut détruire la carte mère." },
+  { q: "Tu changes un écran livré avec châssis : il faut basculer la carte mère et le connecteur de charge. Comment fais-tu ?",
+    o: ["Je déconnecte toutes les nappes pour être tranquille", "Je ne déconnecte que les nappes nécessaires et je laisse reliés les éléments qui passent ensemble", "Je laisse tout dans l'ancien châssis", "Peu importe, les connecteurs ne s'abîment pas"], r: 1,
+    e: "Chaque débranchement / rebranchement fatigue le connecteur. Moins on touche aux nappes, moins on crée de pannes." },
+  { q: "Après un changement d'écran, le client se plaint que l'écran reste allumé pendant ses appels et qu'il raccroche avec la joue. Quelle pièce vérifies-tu ?",
+    o: ["Le haut-parleur du bas", "Le capteur de proximité", "La batterie", "Le moteur vibreur"], r: 1,
+    e: "Le capteur de proximité éteint l'écran contre l'oreille. Nappe pincée ou capteur mal repositionné : c'est le premier suspect." },
   { q: "Pourquoi faire un test d'entrée devant le client ?",
     o: ["Pour remplir le temps d'attente", "Pour noter ce qui fonctionne et l'état du téléphone avant intervention", "Ce n'est pas utile si le client est pressé", "Pour vendre un accessoire"], r: 1,
     e: "Ce qui n'est pas constaté à l'entrée ne peut pas être défendu à la sortie." },
@@ -670,7 +700,7 @@ function Quiz() {
           <div style={{ flex: 1, minWidth: 220, fontSize: 14 }}>
             {score === QUIZ.length
               ? "Sans faute, bravo. Montre ce score à ton responsable, tu peux passer à la pratique encadrée."
-              : score >= 6
+              : score >= 8
                 ? "Bonne base. Relis les questions en rouge avec ton responsable avant ta première réparation seul."
                 : "Pas encore. Reprends les onglets Règles d'or et Poste & ESD, puis refais le quiz."}
           </div>
