@@ -3274,7 +3274,8 @@ export default function App() {
     }
   }, []);
 
-  useEffect(() => { if (user) loadAll(); }, [user, loadAll]);
+  // Compte stagiaire limité à la Formation : aucune donnée commerciale à charger.
+  useEffect(() => { if (user && !user.formationSeule) loadAll(); }, [user, loadAll]);
 
   const signOut = () => {
     api.logout(); setUser(null);
@@ -3393,10 +3394,12 @@ export default function App() {
   // (aussi bloqués côté serveur). Il ouvre l'app pour apprendre : Formation
   // passe en premier.
   const MASQUES_TRAINEE = ["visits", "alternance"];
-  const famillesRole = user.role === "trainee"
+  const famillesRole = user.formationSeule
+    ? FAMILLES.filter(f => f.id === "former")
+    : user.role === "trainee"
     ? FAMILLES.map(f => ({ ...f, ecrans: f.ecrans.filter(e => !MASQUES_TRAINEE.includes(e.id)) }))
     : FAMILLES;
-  const famillesOrdonnees = user.role === "rz"
+  const famillesOrdonnees = user.role === "rz" || user.formationSeule
     ? famillesRole
     : user.role === "trainee"
       ? [famillesRole[3], famillesRole[2], famillesRole[1], famillesRole[0]]
@@ -3435,7 +3438,7 @@ export default function App() {
           </div>
           <div className="nav-user">
             <b>{user.name}</b>
-            <span>{user.role === "rz" ? "Resp. de zone" : user.role === "trainee" ? "En formation" : "Magasin"}</span>
+            <span>{user.role === "rz" ? "Resp. de zone" : user.formationSeule ? "Stagiaire" : user.role === "trainee" ? "En formation" : "Magasin"}</span>
           </div>
           <button className="nav-icon" onClick={signOut} title="Se déconnecter">⏻</button>
           <button className="nav-burger" onClick={() => setMenuOpen(o => !o)} aria-label="Menu">{menuOpen ? "✕" : "☰"}</button>
@@ -3446,7 +3449,7 @@ export default function App() {
         <div style={{ padding: "8px 14px 12px", borderBottom: "1px solid rgba(255,255,255,.1)", marginBottom: 6 }}>
           <div style={{ color: "#fff", fontSize: 13.5, fontWeight: 700 }}>{user.name}</div>
           <div style={{ color: C.accentB, fontSize: 10, textTransform: "uppercase", letterSpacing: ".06em" }}>
-            {user.role === "rz" ? "Responsable de zone" : user.role === "trainee" ? "Technicien en formation" : "Magasin"}
+            {user.role === "rz" ? "Responsable de zone" : user.formationSeule ? "Stagiaire" : user.role === "trainee" ? "Technicien en formation" : "Magasin"}
           </div>
           <div style={{ color: "rgba(255,255,255,.45)", fontSize: 11, marginTop: 4 }}>
             {dataStamp}

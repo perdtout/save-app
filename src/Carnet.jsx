@@ -510,7 +510,7 @@ export default function Carnet({ api, user }) {
         </div>
         {doublon && (
           <div className="crn-doublon">
-            <div className="lbl">Doublon{app.referent ? ` avec ${app.referent}` : ""}</div>
+            <div className="lbl">{app.periode || "Doublon"}{app.referent ? ` avec ${app.referent}` : ""}</div>
             <div className="big">{todayIso() < app.debut ? `Début le ${fmtDate(app.debut)}` : `Jour ${Math.min(doublon.fait, doublon.total)} / ${doublon.total}`}</div>
             <div className="bar"><i style={{ width: `${(Math.min(doublon.fait, doublon.total) / doublon.total) * 100}%` }} /></div>
             <div className="lbl" style={{ marginTop: 6 }}>jusqu'au {fmtDate(doublon.fin)}</div>
