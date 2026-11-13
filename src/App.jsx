@@ -3,6 +3,7 @@ import logoRepairMobile from "./RepairMobile.png";
 import Alternance from "./Alternance.jsx";
 import Tarifs from "./Tarifs.jsx";
 import Formation from "./Formation.jsx";
+import Carnet from "./Carnet.jsx";
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  CONFIGURATION
@@ -3198,7 +3199,7 @@ function AtmDossier({ dossier, onBack, onPatch, onCloture, saving, saveError }) 
 
 export default function App() {
   const [user, setUser] = useState(() => api.restore());
-  const [page, setPage] = useState("dashboard");
+  const [page, setPage] = useState(() => (api.restore()?.role === "trainee" ? "carnet" : "dashboard"));
   const [selectedStore, setSelectedStore] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [results, setResults] = useState(null);
@@ -3247,7 +3248,7 @@ export default function App() {
       const [r, v, g, vd, ac, pc, at] = await Promise.all([
         api.get(`/api/results${q}`),
         // Une panne de la base Visites ne doit pas masquer les résultats.
-        api.get(`/api/visits${q}`).catch(() => ({ visits: [] })),
+        api.get(`/api/visits${q}`).catch(() => ({ visits: [] })), // 403 pour un technicien en formation : liste vide
         api.get(`/api/goat${q}`).catch(e => { setGoatError(e.message || "lecture impossible"); return null; }),
         api.get(`/api/vendors${q}`).catch(e => { setVendorsError(e.message || "endpoint indisponible"); return null; }),
         api.get(`/api/actions${q}`).catch(() => ({ actions: [] })),
@@ -3358,7 +3359,7 @@ export default function App() {
 
   const Styles = () => <style dangerouslySetInnerHTML={{ __html: STYLES }} />;
 
-  if (!user) return <><Styles /><LoginScreen serverState={serverState} onRetryPing={checkServer} onLogin={(u) => { setUser(u); setPage("dashboard"); }} /></>;
+  if (!user) return <><Styles /><LoginScreen serverState={serverState} onRetryPing={checkServer} onLogin={(u) => { setUser(u); setPage(u.role === "trainee" ? "carnet" : "dashboard"); }} /></>;
 
   // ─── Navigation à deux niveaux ─────────────────────────────────────────────
   // Dix écrans à plat, sur un téléphone, c'est une barre qui défile et la moitié
@@ -3384,16 +3385,27 @@ export default function App() {
       ] },
     { id: "former", label: "Formation", hint: "Apprendre le métier", ecrans: [
         { id: "formation", label: "Bases de la réparation" },
+        { id: "carnet",    label: "Carnet de réparations" },
       ] },
   ];
+  // Technicien en formation (rôle « trainee ») : chiffres de son magasin,
+  // GOAT, tout le comptoir et toute la formation. Ni Visites ni Alternance
+  // (aussi bloqués côté serveur). Il ouvre l'app pour apprendre : Formation
+  // passe en premier.
+  const MASQUES_TRAINEE = ["visits", "alternance"];
+  const famillesRole = user.role === "trainee"
+    ? FAMILLES.map(f => ({ ...f, ecrans: f.ecrans.filter(e => !MASQUES_TRAINEE.includes(e.id)) }))
+    : FAMILLES;
   const famillesOrdonnees = user.role === "rz"
-    ? FAMILLES
-    : [FAMILLES[2], FAMILLES[3], FAMILLES[1], FAMILLES[0]];
-  const familleDe = (p) => (FAMILLES.find(f => f.ecrans.some(e => e.id === p)) || FAMILLES[0]).id;
+    ? famillesRole
+    : user.role === "trainee"
+      ? [famillesRole[3], famillesRole[2], famillesRole[1], famillesRole[0]]
+      : [famillesRole[2], famillesRole[3], famillesRole[1], famillesRole[0]];
+  const familleDe = (p) => (famillesRole.find(f => f.ecrans.some(e => e.id === p)) || famillesRole[0]).id;
   const familleActive = familleDe(page);
-  const ecransFamille = (FAMILLES.find(f => f.id === familleActive) || FAMILLES[0]);
+  const ecransFamille = (famillesRole.find(f => f.id === familleActive) || famillesRole[0]);
   const ouvrirFamille = (fid) => {
-    const f = FAMILLES.find(x => x.id === fid);
+    const f = famillesRole.find(x => x.id === fid);
     if (f) goTo(f.ecrans[0].id);
   };
   const dataStamp = results?.updated
@@ -3423,7 +3435,7 @@ export default function App() {
           </div>
           <div className="nav-user">
             <b>{user.name}</b>
-            <span>{user.role === "rz" ? "Resp. de zone" : "Magasin"}</span>
+            <span>{user.role === "rz" ? "Resp. de zone" : user.role === "trainee" ? "En formation" : "Magasin"}</span>
           </div>
           <button className="nav-icon" onClick={signOut} title="Se déconnecter">⏻</button>
           <button className="nav-burger" onClick={() => setMenuOpen(o => !o)} aria-label="Menu">{menuOpen ? "✕" : "☰"}</button>
@@ -3434,7 +3446,7 @@ export default function App() {
         <div style={{ padding: "8px 14px 12px", borderBottom: "1px solid rgba(255,255,255,.1)", marginBottom: 6 }}>
           <div style={{ color: "#fff", fontSize: 13.5, fontWeight: 700 }}>{user.name}</div>
           <div style={{ color: C.accentB, fontSize: 10, textTransform: "uppercase", letterSpacing: ".06em" }}>
-            {user.role === "rz" ? "Responsable de zone" : "Magasin"}
+            {user.role === "rz" ? "Responsable de zone" : user.role === "trainee" ? "Technicien en formation" : "Magasin"}
           </div>
           <div style={{ color: "rgba(255,255,255,.45)", fontSize: 11, marginTop: 4 }}>
             {dataStamp}
@@ -3466,6 +3478,8 @@ export default function App() {
           <Tarifs user={user} api={api} />
         ) : page === "formation" ? (
           <Formation />
+        ) : page === "carnet" ? (
+          <Carnet api={api} user={user} />
         ) : (
           <>
             {serverState !== "ok" && (
